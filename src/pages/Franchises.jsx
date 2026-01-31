@@ -1,0 +1,644 @@
+import { useState, useMemo, useEffect } from 'react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Store, Users, TrendingUp } from 'lucide-react'
+import IndianRupeeIcon from '../components/IndianRupeeIcon'
+import api from '../services/api'
+import StatusBadge from '../components/StatusBadge'
+import Modal from '../components/Modal'
+import FranchiseForm from '../components/FranchiseForm'
+import StatCard from '../components/StatCard'
+import ConfirmModal from '../components/ConfirmModal'
+import { toast } from '../services/toastService'
+
+const Franchises = () => {
+  const [franchises, setFranchises] = useState([])
+  const [leads, setLeads] = useState([])
+  const [agents, setAgents] = useState([])
+  const [invoices, setInvoices] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [selectedFranchise, setSelectedFranchise] = useState(null)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, franchise: null })
+
+  useEffect(() => {
+    fetchFranchises()
+    fetchLeads()
+    fetchAgents()
+    fetchInvoices()
+  }, [])
+
+  const fetchFranchises = async () => {
+    try {
+      setLoading(true)
+      const response = await api.franchises.getAll()
+      const franchisesData = response.data || response || []
+      const validFranchises = Array.isArray(franchisesData) ? franchisesData : []
+      setFranchises(validFranchises)
+    } catch (error) {
+      console.error('Error fetching franchises:', error)
+      setFranchises([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchLeads = async () => {
+    try {
+      const response = await api.leads.getAll()
+      let leadsData = []
+      if (Array.isArray(response)) {
+        leadsData = response
+      } else if (response && Array.isArray(response.data)) {
+        leadsData = response.data
+      }
+      setLeads(leadsData)
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      setLeads([])
+    }
+  }
+
+  const fetchAgents = async () => {
+    try {
+      const response = await api.agents.getAll()
+      const agentsData = response.data || response || []
+      setAgents(Array.isArray(agentsData) ? agentsData : [])
+    } catch (error) {
+      console.error('Error fetching agents:', error)
+      setAgents([])
+    }
+  }
+
+  const fetchInvoices = async () => {
+    try {
+      const response = await api.invoices.getAll()
+      let invoicesData = []
+      if (Array.isArray(response)) {
+        invoicesData = response
+      } else if (response && Array.isArray(response.data)) {
+        invoicesData = response.data
+      }
+      setInvoices(invoicesData)
+    } catch (error) {
+      console.error('Error fetching invoices:', error)
+      setInvoices([])
+    }
+  }
+
+  // Get franchise statistics
+  const getFranchiseStats = (franchiseId) => {
+    if (!franchiseId) {
+      return { agents: 0, leads: 0, revenue: 0 }
+    }
+    
+    const franchiseAgents = agents.filter(agent => {
+      const agentFranchiseId = agent.franchise?._id || agent.franchise?.id || agent.franchise || agent.franchiseId
+      return agentFranchiseId === franchiseId || agentFranchiseId?.toString() === franchiseId?.toString()
+    })
+    
+    const franchiseLeads = leads.filter(lead => {
+      const leadFranchiseId = lead.franchise?._id || lead.franchise?.id || lead.franchise || lead.franchiseId
+      return leadFranchiseId === franchiseId || leadFranchiseId?.toString() === franchiseId?.toString()
+    })
+    
+    const franchiseInvoices = invoices.filter(invoice => {
+      const invoiceFranchiseId = invoice.franchise?._id || invoice.franchise?.id || invoice.franchise || invoice.franchiseId
+      return invoiceFranchiseId === franchiseId || invoiceFranchiseId?.toString() === franchiseId?.toString()
+    })
+    
+    const revenue = franchiseInvoices.reduce((sum, inv) => {
+      return sum + (inv.commissionAmount || inv.netPayable || inv.amount || 0)
+    }, 0)
+    
+    return {
+      agents: franchiseAgents.length,
+      leads: franchiseLeads.length,
+      revenue: revenue
+    }
+  }
+
+  // Calculate statistics
+  const totalFranchises = franchises.length
+  const activeFranchises = franchises.filter(f => f.status === 'active').length
+  const allFranchiseStats = franchises.map(f => getFranchiseStats(f.id || f._id))
+  const totalRevenue = allFranchiseStats.reduce((sum, stats) => sum + stats.revenue, 0)
+  const totalAgentsCount = allFranchiseStats.reduce((sum, stats) => sum + stats.agents, 0)
+
+  // Get franchise statistics (if needed, can be fetched from API)
+  // const getFranchiseStats = async (franchiseId) => {
+  //   try {
+  //     const performance = await api.franchises.getPerformance(franchiseId)
+  //     return performance
+  //   } catch (error) {
+  //     console.error('Error fetching franchise stats:', error)
+  //     return { agents: 0, leads: 0, activeLeads: 0 }
+  //   }
+  // }
+
+  // Filter and search franchises
+  const filteredFranchises = useMemo(() => {
+    if (!franchises || franchises.length === 0) return []
+    
+    return franchises.filter((franchise) => {
+      if (!franchise) return false
+      
+      const searchLower = searchTerm.toLowerCase()
+      const matchesSearch =
+        (franchise.name && franchise.name.toLowerCase().includes(searchLower)) ||
+        (franchise.address?.city && franchise.address.city.toLowerCase().includes(searchLower)) ||
+        (franchise.address?.state && franchise.address.state.toLowerCase().includes(searchLower)) ||
+        (franchise.ownerName && franchise.ownerName.toLowerCase().includes(searchLower)) ||
+        (franchise.email && franchise.email.toLowerCase().includes(searchLower))
+      const matchesStatus = statusFilter === 'all' || franchise.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [franchises, searchTerm, statusFilter])
+
+  // Sort franchises
+  const sortedFranchises = useMemo(() => {
+    if (!sortConfig.key) return filteredFranchises
+
+    return [...filteredFranchises].sort((a, b) => {
+      if (!a || !b) return 0
+      
+      let aValue = a[sortConfig.key]
+      let bValue = b[sortConfig.key]
+
+      // Handle null/undefined values
+      if (aValue == null) aValue = ''
+      if (bValue == null) bValue = ''
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        aValue = aValue.toLowerCase()
+        bValue = bValue.toLowerCase()
+      }
+
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1
+      }
+      return 0
+    })
+  }, [filteredFranchises, sortConfig])
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) {
+      return <ArrowUpDown className="w-4 h-4 text-gray-400" />
+    }
+    return sortConfig.direction === 'asc' ? (
+      <ArrowUp className="w-4 h-4 text-primary-900" />
+    ) : (
+      <ArrowDown className="w-4 h-4 text-primary-900" />
+    )
+  }
+
+  const handleCreate = () => {
+    setSelectedFranchise(null)
+    setIsCreateModalOpen(true)
+  }
+
+  const handleEdit = (franchise) => {
+    setSelectedFranchise(franchise)
+    setIsEditModalOpen(true)
+  }
+
+  const handleView = (franchise) => {
+    setSelectedFranchise(franchise)
+    setIsDetailModalOpen(true)
+  }
+
+  const handleSave = async (formData) => {
+    try {
+      if (selectedFranchise) {
+        // Update existing franchise
+        const franchiseId = selectedFranchise.id || selectedFranchise._id
+        if (!franchiseId) {
+          toast.error('Error', 'Franchise ID is missing')
+          return
+        }
+        const response =         await api.franchises.update(franchiseId, formData)
+        await fetchFranchises()
+        await fetchLeads() // Refresh to update statistics
+        await fetchAgents() // Refresh to update statistics
+        await fetchInvoices() // Refresh to update statistics
+        setIsEditModalOpen(false)
+        setSelectedFranchise(null)
+        toast.success('Success', 'Franchise updated successfully')
+      } else {
+        // Create new franchise
+        const response = await api.franchises.create(formData)
+        if (response.success || response.data) {
+          await fetchFranchises()
+          await fetchLeads() // Refresh to update statistics
+          await fetchAgents() // Refresh to update statistics
+          await fetchInvoices() // Refresh to update statistics
+          setIsCreateModalOpen(false)
+          toast.success('Success', 'Franchise created successfully and saved to database')
+        } else {
+          throw new Error('Invalid response from server')
+        }
+      }
+    } catch (error) {
+      console.error('Error saving franchise:', error)
+      toast.error('Error', error.message || 'Failed to save franchise. Please check your connection and try again.')
+    }
+  }
+
+  const handleDeleteClick = (franchise) => {
+    setConfirmDelete({ isOpen: true, franchise })
+  }
+
+  const handleDeleteConfirm = async () => {
+    const franchise = confirmDelete.franchise
+    const franchiseId = franchise.id || franchise._id
+    if (!franchiseId) {
+      toast.error('Error', 'Franchise ID is missing')
+      return
+    }
+
+    try {
+      await api.franchises.delete(franchiseId)
+      await fetchFranchises()
+      toast.success('Success', `Franchise "${franchise.name || 'this franchise'}" deleted successfully`)
+      setConfirmDelete({ isOpen: false, franchise: null })
+    } catch (error) {
+      console.error('Error deleting franchise:', error)
+      toast.error('Error', error.message || 'Failed to delete franchise')
+    }
+  }
+
+  const statusOptions = [
+    { value: 'all', label: 'All Status' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+  ]
+
+  return (
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Franchises Management</h1>
+          <p className="text-sm text-gray-600 mt-1">Manage franchise locations</p>
+        </div>
+        <button
+          onClick={handleCreate}
+          className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Create Franchise</span>
+        </button>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Total Franchises"
+          value={totalFranchises}
+          change="+1 this year"
+          changeType="positive"
+          icon={Store}
+          color="blue"
+        />
+        <StatCard
+          title="Active Franchises"
+          value={activeFranchises}
+          change={`${((activeFranchises / totalFranchises) * 100).toFixed(0)}% active`}
+          changeType="positive"
+          icon={TrendingUp}
+          color="green"
+        />
+        <StatCard
+          title="Total Agents"
+          value={totalAgentsCount}
+          change="Across all franchises"
+          changeType="positive"
+          icon={Users}
+          color="orange"
+        />
+        <StatCard
+          title="Total Revenue"
+          value={`₹${(totalRevenue / 1000).toFixed(0)}K`}
+          change="+18.5%"
+          changeType="positive"
+          icon={IndianRupeeIcon}
+          color="purple"
+        />
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name, location, or manager..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center gap-2">
+                    Franchise Name
+                    {getSortIcon('name')}
+                  </div>
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('address.city')}
+                >
+                  <div className="flex items-center gap-2">
+                    Location
+                    {getSortIcon('address.city')}
+                  </div>
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Owner
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('totalAgents')}
+                >
+                  <div className="flex items-center gap-2">
+                    Agents
+                    {getSortIcon('totalAgents')}
+                  </div>
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('totalLeads')}
+                >
+                  <div className="flex items-center gap-2">
+                    Total Leads
+                    {getSortIcon('totalLeads')}
+                  </div>
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('revenue')}
+                >
+                  <div className="flex items-center gap-2">
+                    Revenue
+                    {getSortIcon('revenue')}
+                  </div>
+                </th>
+                <th
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('status')}
+                >
+                  <div className="flex items-center gap-2">
+                    Status
+                    {getSortIcon('status')}
+                  </div>
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                    Loading...
+                  </td>
+                </tr>
+              ) : sortedFranchises.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                    No franchises found
+                  </td>
+                </tr>
+              ) : (
+                sortedFranchises.map((franchise) => {
+                  const franchiseId = franchise.id || franchise._id
+                  const stats = getFranchiseStats(franchiseId)
+                  
+                  return (
+                    <tr key={franchiseId} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{franchise.name || 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{franchise.address?.city || franchise.location || 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{franchise.ownerName || 'N/A'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{stats.agents}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-primary-900">{stats.leads}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          ₹{stats.revenue.toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <StatusBadge status={franchise.status} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleView(franchise)}
+                            className="text-primary-900 hover:text-primary-900 p-1"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(franchise)}
+                            className="text-gray-600 hover:text-gray-900 p-1"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(franchise)}
+                            className="text-red-600 hover:text-red-900 p-1"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        {sortedFranchises.length > 0 && (
+          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
+            <p className="text-sm text-gray-600">
+              Showing <span className="font-medium">{sortedFranchises.length}</span> of{' '}
+              <span className="font-medium">{sortedFranchises.length}</span> franchises
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Create Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Create New Franchise"
+      >
+        <FranchiseForm onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} />
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setSelectedFranchise(null)
+        }}
+        title="Edit Franchise"
+      >
+        <FranchiseForm franchise={selectedFranchise} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} />
+      </Modal>
+
+      {/* Detail Modal */}
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false)
+          setSelectedFranchise(null)
+        }}
+        title="Franchise Details"
+        size="md"
+      >
+        {selectedFranchise && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">Franchise Name</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.name}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Owner Name</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.ownerName || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Email</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.email || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Mobile</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.mobile || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">City</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.address?.city || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Status</label>
+                <div className="mt-1">
+                  <StatusBadge status={selectedFranchise.status} />
+                </div>
+              </div>
+            </div>
+
+            {/* Performance Metrics */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Performance Metrics</h4>
+              {(() => {
+                const franchiseId = selectedFranchise?.id || selectedFranchise?._id
+                const stats = getFranchiseStats(franchiseId)
+                return (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">Total Agents</p>
+                      <p className="text-lg font-bold text-gray-900">{stats.agents}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">Total Leads</p>
+                      <p className="text-lg font-bold text-primary-900">{stats.leads}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3 col-span-2">
+                      <p className="text-xs text-gray-500">Total Revenue</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        ₹{stats.revenue.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
+            <div className="pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setIsDetailModalOpen(false)
+                  handleEdit(selectedFranchise)
+                }}
+                className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+              >
+                Edit Franchise
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmDelete.isOpen}
+        onClose={() => setConfirmDelete({ isOpen: false, franchise: null })}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Franchise"
+        message={`Are you sure you want to delete franchise "${confirmDelete.franchise?.name || 'this franchise'}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
+    </div>
+  )
+}
+
+export default Franchises

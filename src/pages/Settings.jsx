@@ -1,0 +1,347 @@
+import { useState, useRef, useEffect } from 'react'
+import { User, Mail, Phone, Camera, Save, X } from 'lucide-react'
+import { toast } from '../services/toastService'
+import api from '../services/api'
+import { authService } from '../services/auth.service'
+
+const Settings = () => {
+  const [user, setUser] = useState({
+    name: 'User Name',
+    email: 'user@example.com',
+    phone: '',
+    mobile: '',
+    profileImage: null,
+    role: null,
+  })
+
+  const [previewImage, setPreviewImage] = useState(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+  })
+  const fileInputRef = useRef(null)
+
+  // Fetch current user data
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        setLoading(true)
+        const response = await api.auth.getCurrentUser()
+        const userData = response.data || response
+        
+        if (userData) {
+          const userState = {
+            name: userData.name || userData.fullName || 'User Name',
+            email: userData.email || 'user@example.com',
+            phone: userData.phone || userData.mobile || '',
+            mobile: userData.mobile || userData.phone || '',
+            profileImage: userData.profileImage || null,
+            role: userData.role || null,
+          }
+          
+          setUser(userState)
+          setFormData({
+            name: userState.name,
+            email: userState.email,
+            phone: userState.phone || userState.mobile,
+          })
+          
+          // Update authService user data
+          authService.setUser(userData)
+          
+          // Dispatch custom event to notify other components
+          window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: userData }))
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error)
+        // Fallback to localStorage user
+        const storedUser = authService.getUser()
+        if (storedUser) {
+          const userState = {
+            name: storedUser.name || storedUser.fullName || 'User Name',
+            email: storedUser.email || 'user@example.com',
+            phone: storedUser.phone || storedUser.mobile || '',
+            mobile: storedUser.mobile || storedUser.phone || '',
+            profileImage: storedUser.profileImage || null,
+            role: storedUser.role || null,
+          }
+          setUser(userState)
+          setFormData({
+            name: userState.name,
+            email: userState.email,
+            phone: userState.phone || userState.mobile,
+          })
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUser()
+  }, [])
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Error', 'Image size should be less than 5MB')
+        return
+      }
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Error', 'Please select a valid image file')
+        return
+      }
+      
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPreviewImage(reader.result)
+        setUser((prev) => ({ ...prev, profileImage: reader.result }))
+        // Update formData for profileImage
+        setFormData((prev) => ({ ...prev, profileImage: reader.result }))
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSave = async () => {
+    try {
+      // TODO: Replace with actual API call
+      // await fetch('/api/user/profile', {
+      //   method: 'PUT',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify(formData),
+      // })
+
+      setUser((prev) => ({ ...prev, ...formData }))
+      setIsEditing(false)
+      toast.success('Profile Updated', 'Your profile has been updated successfully!')
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      toast.error('Update Failed', 'Failed to update profile. Please try again.')
+    }
+  }
+
+  const handleCancel = () => {
+    setFormData({
+      name: user.name,
+      email: user.email,
+      phone: user.phone || user.mobile,
+    })
+    setIsEditing(false)
+    setPreviewImage(null) // Clear preview on cancel
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-gray-500">Loading profile...</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <p className="text-sm text-gray-600 mt-1">Manage your account settings and preferences</p>
+      </div>
+
+      {/* Profile Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-gray-900">Profile Information</h2>
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 text-sm font-medium text-primary-900 hover:text-primary-800 transition-colors"
+            >
+              Edit Profile
+            </button>
+          )}
+        </div>
+
+        {/* Profile Image */}
+        <div className="flex items-center gap-6 mb-6">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full bg-primary-900 flex items-center justify-center text-white font-semibold text-2xl overflow-hidden">
+              {previewImage || user.profileImage ? (
+                <img
+                  src={previewImage || user.profileImage}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full object-cover"
+                />
+              ) : (
+                <User className="w-12 h-12" />
+              )}
+            </div>
+            {isEditing && (
+              <label className="absolute bottom-0 right-0 w-8 h-8 bg-primary-900 rounded-full flex items-center justify-center text-white hover:bg-primary-800 transition-colors cursor-pointer">
+                <Camera className="w-4 h-4" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </label>
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">{user.name}</p>
+            <p className="text-sm text-gray-500">{user.email}</p>
+            {user.role && (
+              <p className="text-xs text-primary-600 font-medium mt-1">
+                {user.role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+              </p>
+            )}
+            {isEditing && (
+              <p className="text-xs text-gray-400 mt-1">Click camera icon to change profile picture</p>
+            )}
+          </div>
+        </div>
+
+        {/* Profile Form */}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Full Name
+            </label>
+            {isEditing ? (
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Enter your name"
+              />
+            ) : (
+              <p className="text-sm text-gray-900 py-2">{user.name}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            {isEditing ? (
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Enter your email"
+              />
+            ) : (
+              <p className="text-sm text-gray-900 py-2">{user.email}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone Number
+            </label>
+            {isEditing ? (
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Enter your phone number"
+              />
+            ) : (
+              <p className="text-sm text-gray-900 py-2">{user.phone}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Role
+            </label>
+            <p className="text-sm text-gray-900 py-2">
+              {user.role ? (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                  {user.role.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </span>
+              ) : (
+                <span className="text-gray-400">Not assigned</span>
+              )}
+            </p>
+          </div>
+
+          {isEditing && (
+            <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={handleSave}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Changes</span>
+              </button>
+              <button
+                onClick={handleCancel}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                <span>Cancel</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Account Settings Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Account Settings</h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-3 border-b border-gray-200">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Change Password</p>
+              <p className="text-xs text-gray-500">Update your password to keep your account secure</p>
+            </div>
+            <button className="px-4 py-2 text-sm font-medium text-primary-900 hover:text-primary-800 transition-colors">
+              Change
+            </button>
+          </div>
+          <div className="flex items-center justify-between py-3 border-b border-gray-200">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Two-Factor Authentication</p>
+              <p className="text-xs text-gray-500">Add an extra layer of security to your account</p>
+            </div>
+            <button className="px-4 py-2 text-sm font-medium text-primary-900 hover:text-primary-800 transition-colors">
+              Enable
+            </button>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Delete Account</p>
+              <p className="text-xs text-gray-500">Permanently delete your account and all data</p>
+            </div>
+            <button className="px-4 py-2 text-sm font-medium text-red-600 hover:text-red-700 transition-colors">
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default Settings
