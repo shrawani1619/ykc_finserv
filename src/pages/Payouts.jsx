@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Calendar, CheckCircle } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, CreditCard, Calendar, CheckCircle, ChevronDown, ChevronUp, FileDown } from 'lucide-react'
 import IndianRupeeIcon from '../components/IndianRupeeIcon'
 import api from '../services/api'
 import { authService } from '../services/auth.service'
@@ -9,16 +9,21 @@ import PayoutForm from '../components/PayoutForm'
 import StatCard from '../components/StatCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
+import { exportToExcel } from '../utils/exportExcel'
 
 const Payouts = () => {
   const userRole = authService.getUser()?.role || 'super_admin'
   const isAgent = userRole === 'agent'
-  
+
   const [payouts, setPayouts] = useState([])
   const [agents, setAgents] = useState([])
+  const [franchises, setFranchises] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [franchiseFilter, setFranchiseFilter] = useState('')
+  const [agentFilter, setAgentFilter] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
@@ -30,8 +35,17 @@ const Payouts = () => {
     fetchPayouts()
     if (!isAgent) {
       fetchAgents()
+      fetchFranchises()
     }
   }, [isAgent])
+
+  const fetchFranchises = async () => {
+    try {
+      const res = await api.franchises.getAll()
+      const data = res?.data || res || []
+      setFranchises(Array.isArray(data) ? data : [])
+    } catch (_) { setFranchises([]) }
+  }
 
   const fetchPayouts = async () => {
     try {
@@ -73,10 +87,17 @@ const Payouts = () => {
   // Filter and search payouts
   const filteredPayouts = useMemo(() => {
     if (!payouts || payouts.length === 0) return []
-    
+
     return payouts.filter((payout) => {
       if (!payout) return false
-      
+      if (franchiseFilter) {
+        const fid = payout.franchise?._id || payout.franchise?.id || payout.franchise
+        if (!fid || (fid !== franchiseFilter && fid.toString() !== franchiseFilter)) return false
+      }
+      if (agentFilter) {
+        const aid = payout.agent?._id || payout.agent?.id || payout.agent
+        if (!aid || (aid !== agentFilter && aid.toString() !== agentFilter)) return false
+      }
       const searchLower = searchTerm.toLowerCase()
       const agentName = payout.agent?.name || (agents.length > 0 ? agents.find(a => (a.id === payout.agentId) || (a._id === payout.agentId))?.name : '')
       const matchesSearch =
@@ -85,7 +106,10 @@ const Payouts = () => {
       const matchesStatus = statusFilter === 'all' || payout.status === statusFilter
       return matchesSearch && matchesStatus
     })
-  }, [payouts, searchTerm, statusFilter, agents])
+  }, [payouts, searchTerm, statusFilter, franchiseFilter, agentFilter, agents])
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== ''
+  const clearPayoutFilters = () => { setSearchTerm(''); setStatusFilter('all'); setFranchiseFilter(''); setAgentFilter('') }
 
   // Sort payouts
   const sortedPayouts = useMemo(() => {
@@ -93,7 +117,7 @@ const Payouts = () => {
 
     return [...filteredPayouts].sort((a, b) => {
       if (!a || !b) return 0
-      
+
       let aValue = a[sortConfig.key]
       let bValue = b[sortConfig.key]
 
@@ -152,14 +176,14 @@ const Payouts = () => {
   const handleSave = async (formData) => {
     try {
       console.log('🔍 DEBUG: Payout form data received:', formData)
-      
+
       if (selectedPayout) {
         const payoutId = selectedPayout.id || selectedPayout._id
         if (!payoutId) {
           toast.error('Error', 'Payout ID is missing')
           return
         }
-        
+
         // Ensure all required fields are present for update
         const updateData = {
           ...formData,
@@ -167,7 +191,7 @@ const Payouts = () => {
           totalAmount: formData.totalAmount || formData.amount,
           netPayable: formData.netPayable || formData.amount,
         }
-        
+
         console.log('🔍 DEBUG: Updating payout with data:', updateData)
         await api.payouts.update(payoutId, updateData)
         await fetchPayouts()
@@ -196,7 +220,7 @@ const Payouts = () => {
           toast.error('Error', 'Payout number is required')
           return
         }
-        
+
         console.log('🔍 DEBUG: Creating payout with data:', formData)
         await api.payouts.create(formData)
         await fetchPayouts()
@@ -271,13 +295,39 @@ const Payouts = () => {
           <h1 className="text-2xl font-bold text-gray-900">Payouts Management</h1>
           <p className="text-sm text-gray-600 mt-1">Manage agent payouts and commissions</p>
         </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Create Payout</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = sortedPayouts.map((p) => ({
+                'Payout Number': p.payoutNumber || 'N/A',
+                Agent: p.agent?.name || getAgentName(p.agentId || p.agent) || 'N/A',
+                Franchise: p.franchise?.name || 'N/A',
+                'Total Amount': p.totalAmount ?? '',
+                'TDS Amount': p.tdsAmount ?? '',
+                'Net Payable': p.netPayable ?? '',
+                Status: p.status || 'N/A',
+                'Account Number': p.bankDetails?.accountNumber || 'N/A',
+                IFSC: p.bankDetails?.ifsc || 'N/A',
+                'Bank Name': p.bankDetails?.bankName || 'N/A',
+              }))
+              exportToExcel(rows, `payouts_export_${Date.now()}`, 'Payouts')
+              toast.success('Export', `Exported ${rows.length} payouts to Excel`)
+            }}
+            disabled={sortedPayouts.length === 0}
+            title="Export currently filtered data to Excel"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileDown className="w-5 h-5" />
+            <span>Export to Excel</span>
+          </button>
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Create Payout</span>
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -317,33 +367,58 @@ const Payouts = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by payout number or agent name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <button type="button" onClick={() => setFiltersOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+          <span className="flex items-center gap-2 font-medium text-gray-900">
+            <Filter className="w-5 h-5 text-gray-500" />
+            Filter options
+            {hasActiveFilters && <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">Active</span>}
+          </span>
+          {filtersOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+        </button>
+        {filtersOpen && (
+          <div className="border-t border-gray-200 p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="text" placeholder="Payout #, agent name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                  {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              {!isAgent && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
+                    <select value={franchiseFilter} onChange={(e) => setFranchiseFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                      <option value="">All franchises</option>
+                      {franchises.map((f) => <option key={f._id || f.id} value={f._id || f.id}>{f.name || 'Unnamed'}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
+                    <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                      <option value="">All agents</option>
+                      {agents.map((a) => <option key={a._id || a.id} value={a._id || a.id}>{a.name || a.email || 'Unnamed'}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+            {hasActiveFilters && (
+              <div className="flex items-center gap-2 pt-1">
+                <button type="button" onClick={clearPayoutFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">Clear all filters</button>
+                <span className="text-sm text-gray-500">Showing {filteredPayouts.length} of {payouts.length} payouts</span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Table */}

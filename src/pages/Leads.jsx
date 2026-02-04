@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Copy, Settings2, History, X } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Copy, Settings2, History, X, FileDown } from 'lucide-react'
 import api from '../services/api'
 import { authService } from '../services/auth.service'
 import StatusBadge from '../components/StatusBadge'
@@ -7,6 +7,7 @@ import Modal from '../components/Modal'
 import LeadForm from '../components/LeadForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
+import { exportToExcel } from '../utils/exportExcel'
 
 const Leads = () => {
   const userRole = authService.getUser()?.role || 'super_admin'
@@ -23,6 +24,11 @@ const Leads = () => {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [franchiseFilter, setFranchiseFilter] = useState('')
+  const [agentFilter, setAgentFilter] = useState('')
+  const [bankFilter, setBankFilter] = useState('')
+  const [dsaCodeFilter, setDsaCodeFilter] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
@@ -216,6 +222,23 @@ const Leads = () => {
       const matchesStatus = statusFilter === 'all' || lead.status === statusFilter
       if (!matchesStatus) return false
 
+      if (franchiseFilter) {
+        const fid = lead.franchise?._id || lead.franchise?.id || lead.franchise
+        if (!fid || (fid !== franchiseFilter && fid.toString() !== franchiseFilter)) return false
+      }
+      if (agentFilter) {
+        const aid = lead.agent?._id || lead.agent?.id || lead.agent
+        if (!aid || (aid !== agentFilter && aid.toString() !== agentFilter)) return false
+      }
+      if (bankFilter) {
+        const bid = lead.bank?._id || lead.bank?.id || lead.bank
+        if (!bid || (bid !== bankFilter && bid.toString() !== bankFilter)) return false
+      }
+      if (dsaCodeFilter.trim()) {
+        const code = (lead.dsaCode ?? lead.codeUse ?? '').toString().toLowerCase()
+        if (!code.includes(dsaCodeFilter.trim().toLowerCase())) return false
+      }
+
       if (!hasSearch) return true
 
       const applicantEmail = lead.applicantEmail || lead.email || ''
@@ -232,7 +255,17 @@ const Leads = () => {
         loanAccountNo.toLowerCase().includes(searchLower)
       )
     })
-  }, [leads, searchTerm, statusFilter])
+  }, [leads, searchTerm, statusFilter, franchiseFilter, agentFilter, bankFilter, dsaCodeFilter])
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== '' || bankFilter !== '' || dsaCodeFilter.trim() !== ''
+  const clearLeadsFilters = () => {
+    setSearchTerm('')
+    setStatusFilter('all')
+    setFranchiseFilter('')
+    setAgentFilter('')
+    setBankFilter('')
+    setDsaCodeFilter('')
+  }
 
   // Sort leads
   const sortedLeads = useMemo(() => {
@@ -336,7 +369,6 @@ const Leads = () => {
       'franchise': 'Franchise',
       'bank': 'Bank',
       'smBm': 'SM/BM',
-      'verifiedBy': 'Verified By',
       'applicantMobile': 'Mobile',
       'applicantEmail': 'Email',
       'loanType': 'Loan Type',
@@ -344,7 +376,6 @@ const Leads = () => {
       'sanctionedAmount': 'Sanctioned Amount',
       'disbursedAmount': 'Disbursed Amount',
       'status': 'Status',
-      'verificationStatus': 'Verification Status',
       'disbursementDate': 'Disbursement Date',
       'sanctionedDate': 'Sanctioned Date',
       'customerName': 'Customer Name',
@@ -388,7 +419,7 @@ const Leads = () => {
         const franchise = franchises.find(f => (f._id || f.id) === value)
         return franchise ? franchise.name : value.substring(0, 8) + '...'
       }
-      if (fieldName === 'smBm' || fieldName === 'verifiedBy') {
+      if (fieldName === 'smBm') {
         const staffMember = staff.find(s => (s._id || s.id) === value)
         return staffMember ? staffMember.name : value.substring(0, 8) + '...'
       }
@@ -408,7 +439,7 @@ const Leads = () => {
           const bank = banks.find(b => (b._id || b.id) === (value._id || value.id))
           return bank ? bank.name : 'Unknown'
         }
-        if (fieldName === 'smBm' || fieldName === 'verifiedBy') {
+        if (fieldName === 'smBm') {
           const staffMember = staff.find(s => (s._id || s.id) === (value._id || value.id))
           return staffMember ? staffMember.name : 'Unknown'
         }
@@ -456,7 +487,6 @@ const Leads = () => {
         loanAccountNo: formData.loanAccountNo?.trim() || undefined,
         commissionBasis: formData.commissionBasis || undefined,
         commissionPercentage: formData.commissionPercentage ? parseFloat(formData.commissionPercentage) : undefined,
-        verificationStatus: formData.verificationStatus || 'pending',
         smBm: formData.smBmId || undefined,
         smBmEmail: formData.smBmEmail?.trim() || undefined,
         smBmMobile: formData.smBmMobile?.trim() || undefined,
@@ -698,6 +728,38 @@ const Leads = () => {
           <p className="text-sm text-gray-600 mt-1">Manage and track all loan leads</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = sortedLeads.map((lead) => ({
+                'Customer Name': lead.customerName || 'N/A',
+                'Loan Type': lead.loanType?.replace(/_/g, ' ') || 'N/A',
+                'Loan Amount': lead.loanAmount ?? '',
+                'Sanctioned Amount': lead.sanctionedAmount ?? '',
+                'Disbursed Amount': lead.disbursedAmount ?? '',
+                Status: lead.status || 'N/A',
+                Agent: lead.agent?.name || getAgentName(lead.agentId || lead.agent) || 'N/A',
+                Franchise: lead.franchise?.name || getFranchiseName(lead.franchiseId || lead.franchise) || 'N/A',
+                Bank: lead.bank?.name || getBankName(lead.bankId || lead.bank) || 'N/A',
+                'SM/BM': lead.smBm?.name || getStaffName(lead.smBmId || lead.smBm) || 'N/A',
+                ASM: lead.asmName || 'N/A',
+                Branch: lead.branch || 'N/A',
+                'Loan Account No': lead.loanAccountNo || 'N/A',
+                'Disbursement Date': lead.disbursementDate ? new Date(lead.disbursementDate).toLocaleDateString() : 'N/A',
+                'Sanctioned Date': lead.sanctionedDate ? new Date(lead.sanctionedDate).toLocaleDateString() : 'N/A',
+                'DSA Code': lead.dsaCode || lead.codeUse || 'N/A',
+                Remarks: lead.remarks || 'N/A',
+                Created: lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : 'N/A',
+              }))
+              exportToExcel(rows, `leads_export_${Date.now()}`, 'Leads')
+              toast.success('Export', `Exported ${rows.length} leads to Excel`)
+            }}
+            disabled={sortedLeads.length === 0}
+            title="Export currently filtered data to Excel"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileDown className="w-5 h-5" />
+            <span>Export to Excel</span>
+          </button>
           <div className="relative">
             <button
               data-column-settings-button
@@ -764,33 +826,113 @@ const Leads = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+        >
+          <span className="flex items-center gap-2 font-medium text-gray-900">
+            <Filter className="w-5 h-5 text-gray-500" />
+            Filter options
+            {hasActiveFilters && (
+              <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">Active</span>
+            )}
+          </span>
+          {filtersOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+        </button>
+        {filtersOpen && (
+          <div className="border-t border-gray-200 p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Name, email, phone, account..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                >
+                  {statusOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              {!isAgent && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
+                    <select
+                      value={franchiseFilter}
+                      onChange={(e) => setFranchiseFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                    >
+                      <option value="">All franchises</option>
+                      {franchises.map((f) => (
+                        <option key={f._id || f.id} value={f._id || f.id}>{f.name || 'Unnamed'}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
+                    <select
+                      value={agentFilter}
+                      onChange={(e) => setAgentFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                    >
+                      <option value="">All agents</option>
+                      {agents.map((a) => (
+                        <option key={a._id || a.id} value={a._id || a.id}>{a.name || a.email || 'Unnamed'}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bank</label>
+                <select
+                  value={bankFilter}
+                  onChange={(e) => setBankFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                >
+                  <option value="">All banks</option>
+                  {banks.map((b) => (
+                    <option key={b._id || b.id} value={b._id || b.id}>{b.name || 'Unnamed'}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DSA Code</label>
+                <input
+                  type="text"
+                  placeholder="Filter by DSA code..."
+                  value={dsaCodeFilter}
+                  onChange={(e) => setDsaCodeFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                />
+              </div>
+            </div>
+            {hasActiveFilters && (
+              <div className="flex items-center gap-2 pt-1">
+                <button type="button" onClick={clearLeadsFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">
+                  Clear all filters
+                </button>
+                <span className="text-sm text-gray-500">Showing {filteredLeads.length} of {leads.length} leads</span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Table */}
@@ -918,8 +1060,6 @@ const Leads = () => {
                         return <div className="text-sm text-gray-900">₹{(lead.disbursedAmount || 0).toLocaleString()}</div>
                       case 'status':
                         return <StatusBadge status={lead.status || 'logged'} />
-                      case 'verificationStatus':
-                        return <StatusBadge status={lead.verificationStatus || 'pending'} />
                       case 'agent':
                         return (
                           <div className="text-sm text-gray-900">

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, Users } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, Users, ChevronDown, ChevronUp, FileDown } from 'lucide-react'
 import IndianRupeeIcon from '../components/IndianRupeeIcon'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
@@ -8,6 +8,7 @@ import AgentForm from '../components/AgentForm'
 import StatCard from '../components/StatCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
+import { exportToExcel } from '../utils/exportExcel'
 
 const Agents = () => {
   const [agents, setAgents] = useState([])
@@ -17,6 +18,8 @@ const Agents = () => {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [franchiseFilter, setFranchiseFilter] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
@@ -170,11 +173,21 @@ const Agents = () => {
       const matchesSearch =
         (agent.name && agent.name.toLowerCase().includes(searchLower)) ||
         (agent.email && agent.email.toLowerCase().includes(searchLower)) ||
+        (agent.mobile && agent.mobile.toString().includes(searchTerm)) ||
         (agent.phone && agent.phone.toString().includes(searchTerm))
       const matchesStatus = statusFilter === 'all' || agent.status === statusFilter
-      return matchesSearch && matchesStatus
+      const agentFranchiseId = agent.franchise?._id || agent.franchise?.id || agent.franchise
+      const matchesFranchise = !franchiseFilter || (agentFranchiseId && (agentFranchiseId === franchiseFilter || agentFranchiseId.toString() === franchiseFilter))
+      return matchesSearch && matchesStatus && matchesFranchise
     })
-  }, [agents, searchTerm, statusFilter])
+  }, [agents, searchTerm, statusFilter, franchiseFilter])
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== ''
+  const clearAllFilters = () => {
+    setSearchTerm('')
+    setStatusFilter('all')
+    setFranchiseFilter('')
+  }
 
   // Sort agents
   const sortedAgents = useMemo(() => {
@@ -346,13 +359,43 @@ const Agents = () => {
           <h1 className="text-2xl font-bold text-gray-900">Agents Management</h1>
           <p className="text-sm text-gray-600 mt-1">Manage agent profiles and performance</p>
         </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Create Agent</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = sortedAgents.map((agent) => {
+                const agentId = agent.id || agent._id
+                const stats = getAgentLeadStats(agentId)
+                const franchiseId = agent.franchise?._id || agent.franchise?.id || agent.franchise
+                return {
+                  Name: agent.name || 'N/A',
+                  Email: agent.email || 'N/A',
+                  Phone: agent.mobile || agent.phone || 'N/A',
+                  Franchise: agent.franchise?.name || getFranchiseName(franchiseId) || 'N/A',
+                  'Total Leads': stats.total,
+                  'Active Leads': stats.active,
+                  Completed: stats.completed,
+                  Commission: stats.commission,
+                  Status: agent.status || 'N/A',
+                }
+              })
+              exportToExcel(rows, `agents_export_${Date.now()}`, 'Agents')
+              toast.success('Export', `Exported ${rows.length} agents to Excel`)
+            }}
+            disabled={sortedAgents.length === 0}
+            title="Export currently filtered data to Excel"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileDown className="w-5 h-5" />
+            <span>Export to Excel</span>
+          </button>
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Create Agent</span>
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -392,33 +435,85 @@ const Agents = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+        >
+          <span className="flex items-center gap-2 font-medium text-gray-900">
+            <Filter className="w-5 h-5 text-gray-500" />
+            Filter options
+            {hasActiveFilters && (
+              <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">
+                Active
+              </span>
+            )}
+          </span>
+          {filtersOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+        </button>
+        {filtersOpen && (
+          <div className="border-t border-gray-200 p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Name, email, or phone..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                >
+                  {statusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Franchise</label>
+                <select
+                  value={franchiseFilter}
+                  onChange={(e) => setFranchiseFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                >
+                  <option value="">All franchises</option>
+                  {franchises.map((f) => (
+                    <option key={f._id || f.id} value={f._id || f.id}>
+                      {f.name || 'Unnamed'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {hasActiveFilters && (
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="text-sm text-primary-600 hover:text-primary-800 font-medium"
+                >
+                  Clear all filters
+                </button>
+                <span className="text-sm text-gray-500">
+                  Showing {filteredAgents.length} of {agents.length} agents
+                </span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Table */}

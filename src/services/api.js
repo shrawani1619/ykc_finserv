@@ -376,11 +376,26 @@ export const api = {
 
   // Dashboard endpoints
   dashboard: {
-    getAgentDashboard: () => apiRequest('/dashboard/agent'),
-    getStaffDashboard: () => apiRequest('/dashboard/staff'),
-    getAccountsDashboard: () => apiRequest('/dashboard/accounts'),
-    getAdminDashboard: () => apiRequest('/dashboard/admin'),
-    getFranchiseOwnerDashboard: () => apiRequest('/dashboard/franchise-owner'),
+    getAgentDashboard: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/dashboard/agent${queryString ? `?${queryString}` : ''}`);
+    },
+    getStaffDashboard: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/dashboard/staff${queryString ? `?${queryString}` : ''}`);
+    },
+    getAccountsDashboard: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/dashboard/accounts${queryString ? `?${queryString}` : ''}`);
+    },
+    getAdminDashboard: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/dashboard/admin${queryString ? `?${queryString}` : ''}`);
+    },
+    getFranchiseOwnerDashboard: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/dashboard/franchise-owner${queryString ? `?${queryString}` : ''}`);
+    },
   },
 
   // Notifications endpoints

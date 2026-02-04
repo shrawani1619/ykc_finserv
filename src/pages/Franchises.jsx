@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Store, Users, TrendingUp } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Store, Users, TrendingUp, ChevronDown, ChevronUp, FileDown } from 'lucide-react'
 import IndianRupeeIcon from '../components/IndianRupeeIcon'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
@@ -8,6 +8,7 @@ import FranchiseForm from '../components/FranchiseForm'
 import StatCard from '../components/StatCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
+import { exportToExcel } from '../utils/exportExcel'
 
 const Franchises = () => {
   const [franchises, setFranchises] = useState([])
@@ -17,6 +18,9 @@ const Franchises = () => {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [cityFilter, setCityFilter] = useState('')
+  const [stateFilter, setStateFilter] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
@@ -94,26 +98,26 @@ const Franchises = () => {
     if (!franchiseId) {
       return { agents: 0, leads: 0, revenue: 0 }
     }
-    
+
     const franchiseAgents = agents.filter(agent => {
       const agentFranchiseId = agent.franchise?._id || agent.franchise?.id || agent.franchise || agent.franchiseId
       return agentFranchiseId === franchiseId || agentFranchiseId?.toString() === franchiseId?.toString()
     })
-    
+
     const franchiseLeads = leads.filter(lead => {
       const leadFranchiseId = lead.franchise?._id || lead.franchise?.id || lead.franchise || lead.franchiseId
       return leadFranchiseId === franchiseId || leadFranchiseId?.toString() === franchiseId?.toString()
     })
-    
+
     const franchiseInvoices = invoices.filter(invoice => {
       const invoiceFranchiseId = invoice.franchise?._id || invoice.franchise?.id || invoice.franchise || invoice.franchiseId
       return invoiceFranchiseId === franchiseId || invoiceFranchiseId?.toString() === franchiseId?.toString()
     })
-    
+
     const revenue = franchiseInvoices.reduce((sum, inv) => {
       return sum + (inv.commissionAmount || inv.netPayable || inv.amount || 0)
     }, 0)
-    
+
     return {
       agents: franchiseAgents.length,
       leads: franchiseLeads.length,
@@ -139,13 +143,23 @@ const Franchises = () => {
   //   }
   // }
 
+  const cityOptions = useMemo(() => {
+    const cities = [...new Set(franchises.map(f => f.address?.city).filter(Boolean))].sort()
+    return [{ value: '', label: 'All Cities' }, ...cities.map(c => ({ value: c, label: c }))]
+  }, [franchises])
+
+  const stateOptions = useMemo(() => {
+    const states = [...new Set(franchises.map(f => f.address?.state).filter(Boolean))].sort()
+    return [{ value: '', label: 'All States' }, ...states.map(s => ({ value: s, label: s }))]
+  }, [franchises])
+
   // Filter and search franchises
   const filteredFranchises = useMemo(() => {
     if (!franchises || franchises.length === 0) return []
-    
+
     return franchises.filter((franchise) => {
       if (!franchise) return false
-      
+
       const searchLower = searchTerm.toLowerCase()
       const matchesSearch =
         (franchise.name && franchise.name.toLowerCase().includes(searchLower)) ||
@@ -154,9 +168,14 @@ const Franchises = () => {
         (franchise.ownerName && franchise.ownerName.toLowerCase().includes(searchLower)) ||
         (franchise.email && franchise.email.toLowerCase().includes(searchLower))
       const matchesStatus = statusFilter === 'all' || franchise.status === statusFilter
-      return matchesSearch && matchesStatus
+      const matchesCity = !cityFilter || (franchise.address?.city || '') === cityFilter
+      const matchesState = !stateFilter || (franchise.address?.state || '') === stateFilter
+      return matchesSearch && matchesStatus && matchesCity && matchesState
     })
-  }, [franchises, searchTerm, statusFilter])
+  }, [franchises, searchTerm, statusFilter, cityFilter, stateFilter])
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || cityFilter !== '' || stateFilter !== ''
+  const clearFranchiseFilters = () => { setSearchTerm(''); setStatusFilter('all'); setCityFilter(''); setStateFilter('') }
 
   // Sort franchises
   const sortedFranchises = useMemo(() => {
@@ -164,7 +183,7 @@ const Franchises = () => {
 
     return [...filteredFranchises].sort((a, b) => {
       if (!a || !b) return 0
-      
+
       let aValue = a[sortConfig.key]
       let bValue = b[sortConfig.key]
 
@@ -229,7 +248,7 @@ const Franchises = () => {
           toast.error('Error', 'Franchise ID is missing')
           return
         }
-        const response =         await api.franchises.update(franchiseId, formData)
+        const response = await api.franchises.update(franchiseId, formData)
         await fetchFranchises()
         await fetchLeads() // Refresh to update statistics
         await fetchAgents() // Refresh to update statistics
@@ -294,13 +313,41 @@ const Franchises = () => {
           <h1 className="text-2xl font-bold text-gray-900">Franchises Management</h1>
           <p className="text-sm text-gray-600 mt-1">Manage franchise locations</p>
         </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Create Franchise</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = sortedFranchises.map((f) => {
+                const stats = getFranchiseStats(f.id || f._id)
+                return {
+                  Name: f.name || 'N/A',
+                  'Owner Name': f.ownerName || 'N/A',
+                  Email: f.email || 'N/A',
+                  City: f.address?.city || 'N/A',
+                  State: f.address?.state || 'N/A',
+                  Agents: stats.agents,
+                  Leads: stats.leads,
+                  Revenue: stats.revenue,
+                  Status: f.status || 'N/A',
+                }
+              })
+              exportToExcel(rows, `franchises_export_${Date.now()}`, 'Franchises')
+              toast.success('Export', `Exported ${rows.length} franchises to Excel`)
+            }}
+            disabled={sortedFranchises.length === 0}
+            title="Export currently filtered data to Excel"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileDown className="w-5 h-5" />
+            <span>Export to Excel</span>
+          </button>
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Create Franchise</span>
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -340,33 +387,52 @@ const Franchises = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, location, or manager..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <button type="button" onClick={() => setFiltersOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+          <span className="flex items-center gap-2 font-medium text-gray-900">
+            <Filter className="w-5 h-5 text-gray-500" />
+            Filter options
+            {hasActiveFilters && <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">Active</span>}
+          </span>
+          {filtersOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+        </button>
+        {filtersOpen && (
+          <div className="border-t border-gray-200 p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="text" placeholder="Name, location, owner, email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                  {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <select value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                  {cityOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                  {stateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </div>
+            {hasActiveFilters && (
+              <div className="flex items-center gap-2 pt-1">
+                <button type="button" onClick={clearFranchiseFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">Clear all filters</button>
+                <span className="text-sm text-gray-500">Showing {filteredFranchises.length} of {franchises.length} franchises</span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Table */}
@@ -454,7 +520,7 @@ const Franchises = () => {
                 sortedFranchises.map((franchise) => {
                   const franchiseId = franchise.id || franchise._id
                   const stats = getFranchiseStats(franchiseId)
-                  
+
                   return (
                     <tr key={franchiseId} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">

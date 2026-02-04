@@ -1,16 +1,13 @@
-import { useState, useEffect } from 'react'
-import { 
-  Users, 
-  FileText, 
-  Plus,
-  Upload,
+import { useState, useEffect, useCallback } from 'react'
+import {
+  Users,
+  FileText,
   CheckCircle,
   AlertCircle,
-  DollarSign,
   FileCheck,
-  XCircle,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts'
 import IndianRupeeIcon from '../components/IndianRupeeIcon'
 import StatCard from '../components/StatCard'
 import api from '../services/api'
@@ -37,54 +34,50 @@ const Dashboard = () => {
     pendingInvoicesForAction: [],
     escalatedInvoicesList: [],
   })
-  
+  const [loanDistribution, setLoanDistribution] = useState([])
+  const [leadConversionFunnel, setLeadConversionFunnel] = useState([])
+  const [selectedLoanSegmentIndex, setSelectedLoanSegmentIndex] = useState(null)
+
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
+  const userRole = authService.getUser()?.role || 'super_admin'
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true)
-      
-      // Get user role from stored user data
-      const user = authService.getUser()
-      const userRole = user?.role || 'super_admin'
-      
-      // Fetch dashboard data based on user role
+      const params = {}
+
       let dashboardData
       try {
         switch (userRole) {
           case 'agent':
-            dashboardData = await api.dashboard.getAgentDashboard()
+            dashboardData = await api.dashboard.getAgentDashboard(params)
             break
           case 'franchise_owner':
-            dashboardData = await api.dashboard.getFranchiseOwnerDashboard()
+            dashboardData = await api.dashboard.getFranchiseOwnerDashboard(params)
             break
           case 'relationship_manager':
           case 'franchise_manager':
-            dashboardData = await api.dashboard.getStaffDashboard()
+            dashboardData = await api.dashboard.getStaffDashboard(params)
             break
           case 'accounts_manager':
-            dashboardData = await api.dashboard.getAccountsDashboard()
+            dashboardData = await api.dashboard.getAccountsDashboard(params)
             break
           case 'super_admin':
           default:
-            dashboardData = await api.dashboard.getAdminDashboard()
+            dashboardData = await api.dashboard.getAdminDashboard(params)
             break
         }
       } catch (roleError) {
-        // If role-specific dashboard fails, try admin dashboard
         console.warn('Role-specific dashboard failed, trying admin:', roleError)
-        dashboardData = await api.dashboard.getAdminDashboard()
+        dashboardData = await api.dashboard.getAdminDashboard(params)
       }
-      
+
       // Handle different response formats
       const data = dashboardData.data || dashboardData || {}
-      
+
       console.log('🔍 DEBUG: Dashboard data received:', data)
-      
+
       if (userRole === 'agent') {
         setStats({
           totalLeads: data.leads?.total || 0,
@@ -103,7 +96,7 @@ const Dashboard = () => {
           totalRevenue: data.totalRevenue || data.revenue || data.totalCommission || 0,
         })
       }
-      
+
       console.log('🔍 DEBUG: Dashboard stats set:', {
         totalLeads: data.totalLeads || data.leads?.total || 0,
         totalAgents: data.totalAgents || data.agents?.total || 0,
@@ -118,9 +111,7 @@ const Dashboard = () => {
           pendingInvoicesForAction: Array.isArray(data.pendingInvoicesForAction) ? data.pendingInvoicesForAction : [],
           escalatedInvoicesList: Array.isArray(data.escalatedInvoicesList) ? data.escalatedInvoicesList : [],
         })
-        setRelatedLists({
-          recentLeads: Array.isArray(data.recentLeads) ? data.recentLeads : [],
-        })
+        setRelatedLists((prev) => ({ ...prev, recentLeads: [] }))
       }
 
       // Set related lists (for admin and franchise owner dashboards)
@@ -133,7 +124,11 @@ const Dashboard = () => {
           recentPayouts: Array.isArray(data.recentPayouts) ? data.recentPayouts : [],
           relationshipManagers: Array.isArray(data.relationshipManagers) ? data.relationshipManagers : [],
         })
-
+      }
+      if (userRole === 'super_admin' || userRole === 'franchise_owner') {
+        setLoanDistribution(Array.isArray(data.loanDistribution) ? data.loanDistribution : [])
+        setLeadConversionFunnel(Array.isArray(data.leadConversionFunnel) ? data.leadConversionFunnel : [])
+        setSelectedLoanSegmentIndex(null)
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -147,7 +142,11 @@ const Dashboard = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [userRole])
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
 
   const handleRaiseInvoice = async (leadId) => {
     try {
@@ -176,9 +175,9 @@ const Dashboard = () => {
   const handleEscalateInvoice = async (invoiceId) => {
     const reason = prompt('Please provide escalation reason:')
     if (!reason) return
-    
+
     const remarks = prompt('Additional remarks (optional):') || ''
-    
+
     try {
       await api.invoices.escalate(invoiceId, { reason, remarks })
       toast.success('Success', 'Invoice escalated successfully')
@@ -189,9 +188,7 @@ const Dashboard = () => {
     }
   }
 
-  // Calculate statistics
   const { totalLeads, totalAgents, totalInvoices, totalRevenue } = stats
-  const userRole = authService.getUser()?.role || 'super_admin'
   const isAgent = userRole === 'agent'
 
 
@@ -222,9 +219,9 @@ const Dashboard = () => {
               color="blue"
             />
             <StatCard
-              title="Pending Verification"
+              title="Pending"
               value={stats.leads?.pending || 0}
-              change={`${stats.leads?.verified || 0} verified`}
+              change={`${stats.leads?.completed || 0} completed`}
               changeType="neutral"
               icon={FileCheck}
               color="orange"
@@ -245,53 +242,6 @@ const Dashboard = () => {
               icon={IndianRupeeIcon}
               color="green"
             />
-          </div>
-
-          {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button
-                onClick={() => navigate('/leads?action=create&type=fresh')}
-                className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left"
-              >
-                <Plus className="w-6 h-6 text-blue-600" />
-                <div>
-                  <p className="font-semibold text-gray-900">Submit Fresh Lead</p>
-                  <p className="text-sm text-gray-600">Create new lead</p>
-                </div>
-              </button>
-              <button
-                onClick={() => navigate('/leads?action=create&type=disbursed')}
-                className="flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-left"
-              >
-                <DollarSign className="w-6 h-6 text-green-600" />
-                <div>
-                  <p className="font-semibold text-gray-900">Submit Disbursed Case</p>
-                  <p className="text-sm text-gray-600">Add disbursed case</p>
-                </div>
-              </button>
-              <button
-                onClick={() => navigate('/leads')}
-                className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-left"
-              >
-                <Upload className="w-6 h-6 text-purple-600" />
-                <div>
-                  <p className="font-semibold text-gray-900">Upload Documents</p>
-                  <p className="text-sm text-gray-600">Manage documents</p>
-                </div>
-              </button>
-              <button
-                onClick={() => navigate('/invoices')}
-                className="flex items-center gap-3 p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors text-left"
-              >
-                <FileText className="w-6 h-6 text-orange-600" />
-                <div>
-                  <p className="font-semibold text-gray-900">Manage Invoices</p>
-                  <p className="text-sm text-gray-600">View all invoices</p>
-                </div>
-              </button>
-            </div>
           </div>
 
           {/* Raise Payout Invoices Section */}
@@ -411,37 +361,6 @@ const Dashboard = () => {
               </div>
             </div>
           )}
-
-          {/* Recent Leads */}
-          {relatedLists.recentLeads.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Recent Leads</h2>
-                <a href="/leads" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-              </div>
-              <div className="space-y-3">
-                {relatedLists.recentLeads.map((lead) => (
-                  <div key={lead.id || lead._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{lead.loanAccountNo || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
-                        {lead.bank?.name || 'N/A'} • ₹{(lead.loanAmount || 0).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        lead.verificationStatus === 'verified' ? 'bg-green-100 text-green-800' : 
-                        lead.verificationStatus === 'rejected' ? 'bg-red-100 text-red-800' : 
-                        'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {lead.verificationStatus || 'pending'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       ) : (
         <>
@@ -481,51 +400,93 @@ const Dashboard = () => {
             />
           </div>
 
-          {/* Quick Actions - Admin/Relationship Manager */}
-          {(authService.getUser()?.role === 'super_admin' || authService.getUser()?.role === 'relationship_manager') && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button
-                  onClick={() => navigate('/staff')}
-                  className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-left"
-                >
-                  <Users className="w-6 h-6 text-blue-600" />
-                  <div>
-                    <p className="font-semibold text-gray-900">Staff</p>
-                    <p className="text-sm text-gray-600">Manage staff</p>
+          {/* Loan Distribution & Lead Conversion Funnel - Admin & Franchise Owner */}
+          {(authService.getUser()?.role === 'super_admin' || authService.getUser()?.role === 'franchise_owner') && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Loan Distribution</h2>
+                {loanDistribution.length > 0 ? (
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="w-full sm:w-48 h-48 relative flex-shrink-0 [&_svg]:outline-none [&_*]:outline-none">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart style={{ outline: 'none' }}>
+                          <Pie
+                            data={loanDistribution}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius="55%"
+                            outerRadius="85%"
+                            paddingAngle={1}
+                            stroke="none"
+                            activeShape={(props) => <Sector {...props} stroke="none" />}
+                            onClick={(_, index) => setSelectedLoanSegmentIndex(index)}
+                            style={{ cursor: 'pointer', outline: 'none' }}
+                          >
+                            {loanDistribution.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="text-2xl font-bold text-gray-700">
+                          {loanDistribution.length > 0
+                            ? `${loanDistribution[Math.min(selectedLoanSegmentIndex ?? 0, loanDistribution.length - 1)].value}%`
+                            : '0%'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <ul className="space-y-2">
+                        {loanDistribution.map((item, idx) => (
+                          <li
+                            key={idx}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedLoanSegmentIndex(idx)}
+                            onKeyDown={(e) => e.key === 'Enter' && setSelectedLoanSegmentIndex(idx)}
+                            className={`flex items-center gap-2 text-sm cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-gray-100 ${selectedLoanSegmentIndex === idx ? 'bg-gray-100' : ''}`}
+                          >
+                            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                            <span className="text-gray-700 truncate">{item.name}</span>
+                            <span className="font-medium text-gray-900 ml-auto">{item.value}%</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                </button>
-                <button
-                  onClick={() => navigate('/agents')}
-                  className="flex items-center gap-3 p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-left"
-                >
-                  <Users className="w-6 h-6 text-green-600" />
-                  <div>
-                    <p className="font-semibold text-gray-900">Agents</p>
-                    <p className="text-sm text-gray-600">Manage agents</p>
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-8">No loan distribution data</p>
+                )}
+              </div>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-4">Lead Conversion Funnel</h2>
+                {leadConversionFunnel.length > 0 ? (
+                  <div className="space-y-2 max-w-md">
+                    {leadConversionFunnel.map((stage) => {
+                      const maxVal = Math.max(...leadConversionFunnel.map((s) => s.value), 1)
+                      const widthPct = maxVal > 0 ? Math.max((stage.value / maxVal) * 100, 18) : 18
+                      return (
+                        <div key={stage.stage} className="flex items-center gap-3">
+                          <div
+                            className="h-11 rounded flex items-center px-3 transition-all min-w-[120px]"
+                            style={{
+                              width: `${widthPct}%`,
+                              backgroundColor: stage.fill,
+                            }}
+                          >
+                            <span className="text-white font-medium text-sm truncate">{stage.stage}</span>
+                          </div>
+                          <span className="text-gray-700 font-semibold tabular-nums w-12 text-right flex-shrink-0">{stage.value}</span>
+                        </div>
+                      )
+                    })}
                   </div>
-                </button>
-                <button
-                  onClick={() => navigate('/leads')}
-                  className="flex items-center gap-3 p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-left"
-                >
-                  <FileText className="w-6 h-6 text-purple-600" />
-                  <div>
-                    <p className="font-semibold text-gray-900">Leads</p>
-                    <p className="text-sm text-gray-600">View all leads</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => navigate('/invoices')}
-                  className="flex items-center gap-3 p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors text-left"
-                >
-                  <FileText className="w-6 h-6 text-orange-600" />
-                  <div>
-                    <p className="font-semibold text-gray-900">Invoices</p>
-                    <p className="text-sm text-gray-600">Manage invoices</p>
-                  </div>
-                </button>
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-8">No funnel data</p>
+                )}
               </div>
             </div>
           )}
@@ -533,151 +494,149 @@ const Dashboard = () => {
           {/* Related Lists Section - Admin Only */}
           {(authService.getUser()?.role === 'super_admin' || authService.getUser()?.role === 'relationship_manager') && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Leads */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Recent Leads</h2>
-              <a href="/leads" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-            </div>
-            <div className="space-y-3">
-              {relatedLists.recentLeads.length > 0 ? (
-                relatedLists.recentLeads.map((lead) => (
-                  <div key={lead.id || lead._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{lead.loanAccountNo || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
-                        {lead.agent?.name || 'N/A'} • {lead.franchise?.name || 'N/A'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900">₹{(lead.loanAmount || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">{lead.status || 'N/A'}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4">No recent leads</p>
-              )}
-            </div>
-          </div>
+              {/* Recent Leads */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Recent Leads</h2>
+                  <a href="/leads" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
+                </div>
+                <div className="space-y-3">
+                  {relatedLists.recentLeads.length > 0 ? (
+                    relatedLists.recentLeads.map((lead) => (
+                      <div key={lead.id || lead._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{lead.loanAccountNo || 'N/A'}</p>
+                          <p className="text-xs text-gray-600">
+                            {lead.agent?.name || 'N/A'} • {lead.franchise?.name || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-gray-900">₹{(lead.loanAmount || 0).toLocaleString()}</p>
+                          <p className="text-xs text-gray-500">{lead.status || 'N/A'}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No recent leads</p>
+                  )}
+                </div>
+              </div>
 
-          {/* Recent Agents */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Recent Agents</h2>
-              <a href="/agents" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-            </div>
-            <div className="space-y-3">
-              {relatedLists.recentAgents.length > 0 ? (
-                relatedLists.recentAgents.map((agent) => (
-                  <div key={agent.id || agent._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{agent.name || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
-                        {agent.email || 'N/A'} • {agent.franchise?.name || 'N/A'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {agent.status || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4">No recent agents</p>
-              )}
-            </div>
-          </div>
+              {/* Recent Agents */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Recent Agents</h2>
+                  <a href="/agents" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
+                </div>
+                <div className="space-y-3">
+                  {relatedLists.recentAgents.length > 0 ? (
+                    relatedLists.recentAgents.map((agent) => (
+                      <div key={agent.id || agent._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{agent.name || 'N/A'}</p>
+                          <p className="text-xs text-gray-600">
+                            {agent.email || 'N/A'} • {agent.franchise?.name || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-xs px-2 py-1 rounded-full ${agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                            {agent.status || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No recent agents</p>
+                  )}
+                </div>
+              </div>
 
-          {/* Recent Franchises */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Recent Franchises</h2>
-              <a href="/franchises" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-            </div>
-            <div className="space-y-3">
-              {relatedLists.recentFranchises.length > 0 ? (
-                relatedLists.recentFranchises.map((franchise) => (
-                  <div key={franchise.id || franchise._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{franchise.name || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
-                        {franchise.ownerName || 'N/A'} • {franchise.email || 'N/A'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        franchise.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {franchise.status || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4">No recent franchises</p>
-              )}
-            </div>
-          </div>
+              {/* Recent Franchises */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Recent Franchises</h2>
+                  <a href="/franchises" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
+                </div>
+                <div className="space-y-3">
+                  {relatedLists.recentFranchises.length > 0 ? (
+                    relatedLists.recentFranchises.map((franchise) => (
+                      <div key={franchise.id || franchise._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{franchise.name || 'N/A'}</p>
+                          <p className="text-xs text-gray-600">
+                            {franchise.ownerName || 'N/A'} • {franchise.email || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-xs px-2 py-1 rounded-full ${franchise.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                            {franchise.status || 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No recent franchises</p>
+                  )}
+                </div>
+              </div>
 
-          {/* Recent Invoices */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Recent Invoices</h2>
-              <a href="/invoices" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-            </div>
-            <div className="space-y-3">
-              {relatedLists.recentInvoices.length > 0 ? (
-                relatedLists.recentInvoices.map((invoice) => (
-                  <div key={invoice.id || invoice._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{invoice.invoiceNumber || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
-                        {invoice.agent?.name || 'N/A'} • {invoice.franchise?.name || 'N/A'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900">₹{(invoice.commissionAmount || invoice.amount || invoice.netPayable || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">{invoice.status || 'N/A'}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4">No recent invoices</p>
-              )}
-            </div>
-          </div>
+              {/* Recent Invoices */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Recent Invoices</h2>
+                  <a href="/invoices" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
+                </div>
+                <div className="space-y-3">
+                  {relatedLists.recentInvoices.length > 0 ? (
+                    relatedLists.recentInvoices.map((invoice) => (
+                      <div key={invoice.id || invoice._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{invoice.invoiceNumber || 'N/A'}</p>
+                          <p className="text-xs text-gray-600">
+                            {invoice.agent?.name || 'N/A'} • {invoice.franchise?.name || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-gray-900">₹{(invoice.commissionAmount || invoice.amount || invoice.netPayable || 0).toLocaleString()}</p>
+                          <p className="text-xs text-gray-500">{invoice.status || 'N/A'}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No recent invoices</p>
+                  )}
+                </div>
+              </div>
 
-          {/* Recent Payouts */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">Recent Payouts</h2>
-              <a href="/payouts" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {relatedLists.recentPayouts.length > 0 ? (
-                relatedLists.recentPayouts.map((payout) => (
-                  <div key={payout.id || payout._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{payout.payoutNumber || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
-                        {payout.agent?.name || 'N/A'} • {payout.franchise?.name || 'N/A'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900">₹{(payout.netPayable || 0).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">{payout.status || 'N/A'}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4 col-span-2">No recent payouts</p>
-              )}
-            </div>
-          </div>
+              {/* Recent Payouts */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 lg:col-span-2">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">Recent Payouts</h2>
+                  <a href="/payouts" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {relatedLists.recentPayouts.length > 0 ? (
+                    relatedLists.recentPayouts.map((payout) => (
+                      <div key={payout.id || payout._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">{payout.payoutNumber || 'N/A'}</p>
+                          <p className="text-xs text-gray-600">
+                            {payout.agent?.name || 'N/A'} • {payout.franchise?.name || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-gray-900">₹{(payout.netPayable || 0).toLocaleString()}</p>
+                          <p className="text-xs text-gray-500">{payout.status || 'N/A'}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4 col-span-2">No recent payouts</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </>

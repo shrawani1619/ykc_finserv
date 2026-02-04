@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Building2, TrendingUp, FileText } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Building2, TrendingUp, FileText, ChevronDown, ChevronUp, FileDown } from 'lucide-react'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
@@ -7,6 +7,7 @@ import BankForm from '../components/BankForm'
 import StatCard from '../components/StatCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
+import { exportToExcel } from '../utils/exportExcel'
 
 const Banks = () => {
   const [banks, setBanks] = useState([])
@@ -14,6 +15,7 @@ const Banks = () => {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
@@ -62,12 +64,12 @@ const Banks = () => {
     if (!bankId || !leads || leads.length === 0) {
       return { total: 0, active: 0, completed: 0 }
     }
-    
+
     const bankLeads = leads.filter(lead => {
       const leadBankId = lead.bank?._id || lead.bank?.id || lead.bank || lead.bankId
       return leadBankId === bankId || leadBankId?.toString() === bankId?.toString()
     })
-    
+
     return {
       total: bankLeads.length,
       active: bankLeads.filter(l => ['logged', 'sanctioned'].includes(l.status)).length,
@@ -78,10 +80,10 @@ const Banks = () => {
   // Filter and search banks
   const filteredBanks = useMemo(() => {
     if (!banks || banks.length === 0) return []
-    
+
     return banks.filter((bank) => {
       if (!bank) return false
-      
+
       const searchLower = searchTerm.toLowerCase()
       const matchesSearch =
         (bank.name && bank.name.toLowerCase().includes(searchLower)) ||
@@ -93,13 +95,16 @@ const Banks = () => {
     })
   }, [banks, searchTerm, statusFilter])
 
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all'
+  const clearBankFilters = () => { setSearchTerm(''); setStatusFilter('all') }
+
   // Sort banks
   const sortedBanks = useMemo(() => {
     if (!sortConfig.key) return filteredBanks
 
     return [...filteredBanks].sort((a, b) => {
       if (!a || !b) return 0
-      
+
       let aValue = a[sortConfig.key]
       let bValue = b[sortConfig.key]
 
@@ -158,9 +163,9 @@ const Banks = () => {
   const handleSave = async (formData) => {
     try {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Banks.jsx:150',message:'Form data received in handleSave',data:formData,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Banks.jsx:150', message: 'Form data received in handleSave', data: formData, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
       // #endregion
-      
+
       if (selectedBank) {
         const bankId = selectedBank.id || selectedBank._id
         if (!bankId) {
@@ -183,9 +188,9 @@ const Banks = () => {
           contactPerson: formData.contactPerson,
           status: formData.status
         });
-        fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Banks.jsx:163',message:'Creating bank with data',data:formData,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Banks.jsx:163', message: 'Creating bank with data', data: formData, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
         // #endregion
-        
+
         // Ensure all required fields are present and not empty
         // Form validation should have caught empty fields, but double-check here
         if (!formData.name?.trim() || !formData.type || !formData.contactEmail?.trim()) {
@@ -197,14 +202,14 @@ const Banks = () => {
           toast.error('Error', 'Please fill all required fields');
           return;
         }
-        
+
         const bankData = {
           name: formData.name.trim(),
           type: formData.type,
           contactEmail: formData.contactEmail.trim(),
           status: formData.status || 'active',
         };
-        
+
         // Add optional fields only if they have values
         if (formData.contactMobile?.trim()) {
           bankData.contactMobile = formData.contactMobile.trim();
@@ -212,25 +217,25 @@ const Banks = () => {
         if (formData.contactPerson?.trim()) {
           bankData.contactPerson = formData.contactPerson.trim();
         }
-        
+
         // Add custom fields if they exist
         if (formData.customFields && Object.keys(formData.customFields).length > 0) {
           bankData.customFields = formData.customFields;
         }
-        
+
         console.log('🔍 DEBUG: Final bank data to send:', JSON.stringify(bankData, null, 2));
         console.log('🔍 DEBUG: Required fields check:', {
           hasName: !!bankData.name,
           hasType: !!bankData.type,
           hasContactEmail: !!bankData.contactEmail
         });
-        
+
         const response = await api.banks.create(bankData)
         // #region agent log
         console.log('✅ DEBUG: API response received:', JSON.stringify(response, null, 2));
-        fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Banks.jsx:214',message:'API response received',data:response,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Banks.jsx:214', message: 'API response received', data: response, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
         // #endregion
-        
+
         if (response.success || response.data) {
           await fetchBanks()
           await fetchLeads() // Refresh leads to update statistics
@@ -243,7 +248,7 @@ const Banks = () => {
       setSelectedBank(null)
     } catch (error) {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Banks.jsx:170',message:'Error saving bank',data:{error:error.message,formData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/f11153c6-25cf-4c9c-a0b4-730f202e186d', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'Banks.jsx:170', message: 'Error saving bank', data: { error: error.message, formData }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
       // #endregion
       console.error('Error saving bank:', error)
       toast.error('Error', error.message || 'Failed to save bank')
@@ -287,13 +292,42 @@ const Banks = () => {
           <h1 className="text-2xl font-bold text-gray-900">Banks Management</h1>
           <p className="text-sm text-gray-600 mt-1">Manage bank partnerships</p>
         </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span>Create Bank</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const rows = sortedBanks.map((bank) => {
+                const stats = getBankLoanStats(bank.id || bank._id)
+                return {
+                  Name: bank.name || 'N/A',
+                  Code: bank.code || 'N/A',
+                  'Contact Person': bank.contactPerson || 'N/A',
+                  Email: bank.contactEmail || bank.email || 'N/A',
+                  'Contact Mobile': bank.contactMobile || 'N/A',
+                  Type: bank.type || 'N/A',
+                  'Total Loans': stats.total,
+                  'Active Loans': stats.active,
+                  Completed: stats.completed,
+                  Status: bank.status || 'N/A',
+                }
+              })
+              exportToExcel(rows, `banks_export_${Date.now()}`, 'Banks')
+              toast.success('Export', `Exported ${rows.length} banks to Excel`)
+            }}
+            disabled={sortedBanks.length === 0}
+            title="Export currently filtered data to Excel"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FileDown className="w-5 h-5" />
+            <span>Export to Excel</span>
+          </button>
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Create Bank</span>
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -333,33 +367,40 @@ const Banks = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, code, contact person, or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <button type="button" onClick={() => setFiltersOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+          <span className="flex items-center gap-2 font-medium text-gray-900">
+            <Filter className="w-5 h-5 text-gray-500" />
+            Filter options
+            {hasActiveFilters && <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">Active</span>}
+          </span>
+          {filtersOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+        </button>
+        {filtersOpen && (
+          <div className="border-t border-gray-200 p-4 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="text" placeholder="Name, code, contact, email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                  {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </div>
+            {hasActiveFilters && (
+              <div className="flex items-center gap-2 pt-1">
+                <button type="button" onClick={clearBankFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">Clear all filters</button>
+                <span className="text-sm text-gray-500">Showing {filteredBanks.length} of {banks.length} banks</span>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Table */}
@@ -441,7 +482,7 @@ const Banks = () => {
                 sortedBanks.map((bank) => {
                   const bankId = bank.id || bank._id
                   const loanStats = getBankLoanStats(bankId)
-                  
+
                   return (
                     <tr key={bankId} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -463,35 +504,35 @@ const Banks = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-primary-900">{loanStats.active}</div>
                       </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <StatusBadge status={bank.status} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleView(bank)}
-                          className="text-primary-900 hover:text-primary-900 p-1"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleEdit(bank)}
-                          className="text-gray-600 hover:text-gray-900 p-1"
-                          title="Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(bank)}
-                          className="text-red-600 hover:text-red-900 p-1"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <StatusBadge status={bank.status} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleView(bank)}
+                            className="text-primary-900 hover:text-primary-900 p-1"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(bank)}
+                            className="text-gray-600 hover:text-gray-900 p-1"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(bank)}
+                            className="text-red-600 hover:text-red-900 p-1"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   )
                 })
               )}
