@@ -9,8 +9,16 @@ import StatCard from '../components/StatCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
 import { exportToExcel } from '../utils/exportExcel'
+import { canExportData } from '../utils/roleUtils'
+import { authService } from '../services/auth.service'
 
 const Invoices = () => {
+  const userRole = authService.getUser()?.role || ''
+  const isAdmin = userRole === 'super_admin'
+  const isAccountant = userRole === 'accounts_manager'
+  const canCreateInvoice = isAdmin // Accountants can only generate invoices from leads, not create manually
+  const canEditInvoice = isAdmin || isAccountant
+  const canDeleteInvoice = isAdmin || isAccountant
   const [invoices, setInvoices] = useState([])
   const [leads, setLeads] = useState([])
   const [franchises, setFranchises] = useState([])
@@ -315,36 +323,40 @@ const Invoices = () => {
           <p className="text-sm text-gray-600 mt-1">View and manage all invoices</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              const rows = sortedInvoices.map((inv) => ({
-                'Invoice Number': inv.invoiceNumber || 'N/A',
-                'Loan Account No': getLeadName(inv.lead?._id || inv.lead?.id || inv.lead || inv.leadId) || 'N/A',
-                Agent: inv.agent?.name || 'N/A',
-                Associated: getAssociatedForInvoice(inv),
-                'Commission Amount': inv.commissionAmount ?? '',
-                'TDS Amount': inv.tdsAmount ?? '',
-                'Net Payable': inv.netPayable ?? '',
-                Status: inv.status || 'N/A',
-                'Invoice Date': inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : 'N/A',
-              }))
-              exportToExcel(rows, `invoices_export_${Date.now()}`, 'Invoices')
-              toast.success('Export', `Exported ${rows.length} invoices to Excel`)
-            }}
-            disabled={sortedInvoices.length === 0}
-            title="Export currently filtered data to Excel"
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FileDown className="w-5 h-5" />
-            <span>Export to Excel</span>
-          </button>
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create Invoice</span>
-          </button>
+          {canExportData() && (
+            <button
+              onClick={() => {
+                const rows = sortedInvoices.map((inv) => ({
+                  'Invoice Number': inv.invoiceNumber || 'N/A',
+                  'Loan Account No': getLeadName(inv.lead?._id || inv.lead?.id || inv.lead || inv.leadId) || 'N/A',
+                  Agent: inv.agent?.name || 'N/A',
+                  Associated: getAssociatedForInvoice(inv),
+                  'Commission Amount': inv.commissionAmount ?? '',
+                  'TDS Amount': inv.tdsAmount ?? '',
+                  'Net Payable': inv.netPayable ?? '',
+                  Status: inv.status || 'N/A',
+                  'Invoice Date': inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString() : 'N/A',
+                }))
+                exportToExcel(rows, `invoices_export_${Date.now()}`, 'Invoices')
+                toast.success('Export', `Exported ${rows.length} invoices to Excel`)
+              }}
+              disabled={sortedInvoices.length === 0}
+              title="Export currently filtered data to Excel"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileDown className="w-5 h-5" />
+              <span>Export to Excel</span>
+            </button>
+          )}
+          {canCreateInvoice && (
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Create Invoice</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -353,32 +365,24 @@ const Invoices = () => {
         <StatCard
           title="Total Invoices"
           value={totalInvoices}
-          change="+3 this month"
-          changeType="positive"
           icon={FileText}
           color="blue"
         />
         <StatCard
           title="Paid Invoices"
           value={paidInvoices}
-          change={`${((paidInvoices / totalInvoices) * 100).toFixed(0)}% paid`}
-          changeType="positive"
           icon={CheckCircle}
           color="green"
         />
         <StatCard
           title="Total Amount"
           value={`₹${(totalAmount / 1000).toFixed(1)}K`}
-          change="All invoices"
-          changeType="positive"
           icon={IndianRupeeIcon}
           color="orange"
         />
         <StatCard
           title="Paid Amount"
           value={`₹${(paidAmount / 1000).toFixed(1)}K`}
-          change={totalAmount > 0 ? `${((paidAmount / totalAmount) * 100).toFixed(0)}% collected` : '0% collected'}
-          changeType="positive"
           icon={IndianRupeeIcon}
           color="purple"
         />
@@ -547,20 +551,24 @@ const Invoices = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleEdit(invoice)}
-                          className="text-gray-600 hover:text-gray-900 p-1"
-                          title="Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(invoice)}
-                          className="text-red-600 hover:text-red-900 p-1"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canEditInvoice && (
+                          <button
+                            onClick={() => handleEdit(invoice)}
+                            className="text-gray-600 hover:text-gray-900 p-1"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeleteInvoice && (
+                          <button
+                            onClick={() => handleDeleteClick(invoice)}
+                            className="text-red-600 hover:text-red-900 p-1"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -643,17 +651,19 @@ const Invoices = () => {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setIsDetailModalOpen(false)
-                  handleEdit(selectedInvoice)
-                }}
-                className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-              >
-                Edit Invoice
-              </button>
-            </div>
+            {canEditInvoice && (
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setIsDetailModalOpen(false)
+                    handleEdit(selectedInvoice)
+                  }}
+                  className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+                >
+                  Edit Invoice
+                </button>
+              </div>
+            )}
           </div>
         )}
       </Modal>

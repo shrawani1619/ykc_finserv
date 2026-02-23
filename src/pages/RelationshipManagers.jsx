@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Users, TrendingUp, ChevronDown, ChevronUp, FileDown, Store } from 'lucide-react'
 import IndianRupeeIcon from '../components/IndianRupeeIcon'
+import AgentForm from '../components/AgentForm'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
@@ -24,9 +25,14 @@ const RelationshipManagers = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [isCreateAgentModalOpen, setIsCreateAgentModalOpen] = useState(false)
   const [selectedRM, setSelectedRM] = useState(null)
+  const [rmDocs, setRmDocs] = useState([])
+  const [loadingRmDocs, setLoadingRmDocs] = useState(false)
+  const [isSavingRM, setIsSavingRM] = useState(false)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, rm: null })
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false)
 
   useEffect(() => {
     fetchRelationshipManagers()
@@ -83,6 +89,25 @@ const RelationshipManagers = () => {
     } catch (error) {
       console.error('Error fetching invoices:', error)
       setInvoices([])
+    }
+  }
+
+  const fetchRMDocuments = async (rmId) => {
+    if (!rmId) {
+      setRmDocs([])
+      return
+    }
+    try {
+      setLoadingRmDocs(true)
+      // Relationship managers' documents are uploaded as 'user' entity type
+      const response = await api.documents.list('user', rmId, { limit: 100 })
+      const docs = response.data || response || []
+      setRmDocs(Array.isArray(docs) ? docs : [])
+    } catch (error) {
+      console.error('Error fetching relationship manager documents:', error)
+      setRmDocs([])
+    } finally {
+      setLoadingRmDocs(false)
     }
   }
 
@@ -197,8 +222,89 @@ const RelationshipManagers = () => {
     setIsDetailModalOpen(true)
   }
 
+  const handleCreateAgentForRM = (rm) => {
+    setSelectedRM(rm)
+    setIsCreateAgentModalOpen(true)
+  }
+
+  const handleCreateAgentSave = async (formData, files = {}) => {
+    try {
+      setIsCreatingAgent(true)
+      const { phone, ...rest } = formData
+      const agentData = {
+        name: rest.name,
+        email: rest.email,
+        mobile: phone?.trim() || '',
+        password: rest.password || 'Agent@123',
+        role: 'agent',
+        status: rest.status || 'active',
+        managedBy: rest.managedBy || rest.franchise || rest.managedBy || '',
+        managedByModel: rest.managedByModel || (rest.franchise ? 'Franchise' : 'Franchise'),
+        kyc: rest.kyc || undefined,
+        bankDetails: rest.bankDetails || undefined,
+      }
+
+      const response = await api.agents.create(agentData)
+      const created = response.data || response
+
+      // upload pending files if any
+      const agentId = created._id || created.id || created.data?._id
+      try {
+        const pendingFiles = files.pendingFiles || {}
+        for (const [docType, fileObj] of Object.entries(pendingFiles)) {
+          const file = fileObj?.file
+          const label = fileObj?.label
+          if (file) {
+            const fd = new FormData()
+            fd.append('file', file)
+            fd.append('entityType', 'user')
+            fd.append('entityId', agentId)
+            fd.append('documentType', docType)
+            if (label) fd.append('label', label)
+            await api.documents.upload(fd)
+          }
+        }
+        const additional = files.additionalDocuments || []
+        for (const ad of additional) {
+          const file = ad?.file
+          const label = ad?.label
+          if (file) {
+            const fd = new FormData()
+            fd.append('file', file)
+            fd.append('entityType', 'user')
+            fd.append('entityId', agentId)
+            fd.append('documentType', 'additional')
+            if (label) fd.append('label', label)
+            await api.documents.upload(fd)
+          }
+        }
+      } catch (err) {
+        console.error('Error uploading pending files for new agent:', err)
+      }
+
+      setIsCreateAgentModalOpen(false)
+      toast.success('Success', 'Agent created successfully')
+      await fetchRelationshipManagers()
+    } catch (error) {
+      console.error('Error creating agent:', error)
+      toast.error('Error', error.message || 'Failed to create agent')
+    } finally {
+      setIsCreatingAgent(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isDetailModalOpen && selectedRM) {
+      const rmId = selectedRM.id || selectedRM._id
+      if (rmId) fetchRMDocuments(rmId)
+    } else {
+      setRmDocs([])
+    }
+  }, [isDetailModalOpen, selectedRM])
+
   const handleSave = async (formData, files = {}) => {
     try {
+      setIsSavingRM(true)
       if (selectedRM) {
         const id = selectedRM.id || selectedRM._id
         if (!id) {
@@ -238,6 +344,8 @@ const RelationshipManagers = () => {
     } catch (error) {
       console.error('Error saving relationship manager:', error)
       toast.error('Error', error.message || 'Failed to save relationship manager.')
+    } finally {
+      setIsSavingRM(false)
     }
   }
 
@@ -313,9 +421,9 @@ const RelationshipManagers = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Relationship Managers" value={totalRMs} change="+1 this year" changeType="positive" icon={Users} color="blue" />
-        <StatCard title="Active" value={activeRMs} change={`${totalRMs ? ((activeRMs / totalRMs) * 100).toFixed(0) : 0}% active`} changeType="positive" icon={TrendingUp} color="green" />
-        <StatCard title="Total Revenue" value={`₹${(totalRevenue / 1000).toFixed(0)}K`} change="+18.5%" changeType="positive" icon={IndianRupeeIcon} color="purple" />
+        <StatCard title="Total Relationship Managers" value={totalRMs} icon={Users} color="blue" />
+        <StatCard title="Active" value={activeRMs} icon={TrendingUp} color="green" />
+        <StatCard title="Total Revenue" value={`₹${(totalRevenue / 1000).toFixed(0)}K`} icon={IndianRupeeIcon} color="purple" />
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -434,24 +542,126 @@ const RelationshipManagers = () => {
       </div>
 
       <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create New Relationship Manager">
-        <RelationshipManagerForm onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} />
+        <RelationshipManagerForm isSaving={isSavingRM} onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} />
       </Modal>
 
       <Modal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedRM(null) }} title="Edit Relationship Manager">
-        <RelationshipManagerForm relationshipManager={selectedRM} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} />
+        <RelationshipManagerForm relationshipManager={selectedRM} isSaving={isSavingRM} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} />
       </Modal>
 
       <Modal isOpen={isDetailModalOpen} onClose={() => { setIsDetailModalOpen(false); setSelectedRM(null) }} title="Relationship Manager Details" size="md">
         {selectedRM && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-sm font-medium text-gray-500">Name</label><p className="mt-1 text-sm text-gray-900">{selectedRM.name}</p></div>
-              <div><label className="text-sm font-medium text-gray-500">Owner Name</label><p className="mt-1 text-sm text-gray-900">{selectedRM.ownerName || 'N/A'}</p></div>
-              <div><label className="text-sm font-medium text-gray-500">Email</label><p className="mt-1 text-sm text-gray-900">{selectedRM.email || 'N/A'}</p></div>
-              <div><label className="text-sm font-medium text-gray-500">Mobile</label><p className="mt-1 text-sm text-gray-900">{selectedRM.mobile || 'N/A'}</p></div>
-              <div><label className="text-sm font-medium text-gray-500">City</label><p className="mt-1 text-sm text-gray-900">{selectedRM.address?.city || 'N/A'}</p></div>
-              <div><label className="text-sm font-medium text-gray-500">Status</label><div className="mt-1"><StatusBadge status={selectedRM.status} /></div></div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Name</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.name || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Owner Name</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.ownerName || 'N/A'}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-500">Email</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.email || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Mobile</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.mobile || 'N/A'}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-500">Street</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.address?.street || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">City</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.address?.city || 'N/A'}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-500">State</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.address?.state || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Pincode</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.address?.pincode || 'N/A'}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-500">Status</label>
+                <div className="mt-1"><StatusBadge status={selectedRM.status} /></div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Regional Manager</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedRM.regionalManager?.name || selectedRM.regionalManager || 'N/A'}</p>
+              </div>
             </div>
+
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">KYC</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">PAN</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedRM.kyc?.pan || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Aadhaar</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedRM.kyc?.aadhaar || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Bank Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Account Holder</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedRM.bankDetails?.accountHolderName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Account Number</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedRM.bankDetails?.accountNumber ? String(selectedRM.bankDetails.accountNumber) : 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Bank Name</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedRM.bankDetails?.bankName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">IFSC / Branch</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedRM.bankDetails?.ifsc ? `${selectedRM.bankDetails.ifsc} ${selectedRM.bankDetails.branch ? ` / ${selectedRM.bankDetails.branch}` : ''}` : (selectedRM.bankDetails?.branch || 'N/A')}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Uploaded Documents</h4>
+              {loadingRmDocs ? (
+                <p className="text-sm text-gray-500">Loading documents...</p>
+              ) : rmDocs.length === 0 ? (
+                <p className="text-sm text-gray-500">No documents uploaded.</p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {rmDocs.map((doc) => {
+                    const src = doc.url || doc.filePath || doc.fileName
+                    const isImage = doc.mimeType && doc.mimeType.startsWith && doc.mimeType.startsWith('image')
+                    return (
+                      <div key={doc._id || doc.id || doc.fileName} className="w-24">
+                        {isImage ? (
+                          <a href={src} target="_blank" rel="noreferrer">
+                            <img src={src} alt={doc.originalFileName || doc.fileName} className="w-24 h-24 object-cover rounded border" />
+                          </a>
+                        ) : (
+                          <a href={src} target="_blank" rel="noreferrer" className="text-sm text-primary-600 underline">{doc.originalFileName || doc.fileName}</a>
+                        )}
+                        <p className="text-xs text-gray-500 truncate">{doc.documentType}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="pt-4 border-t border-gray-200">
               <h4 className="text-sm font-semibold text-gray-900 mb-3">Performance</h4>
               {(() => {
@@ -466,8 +676,12 @@ const RelationshipManagers = () => {
                 )
               })()}
             </div>
+
             <div className="pt-4 border-t border-gray-200">
-              <button onClick={() => { setIsDetailModalOpen(false); handleEdit(selectedRM) }} className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors">Edit Relationship Manager</button>
+              <div className="flex flex-col gap-2">
+                <button onClick={() => { setIsDetailModalOpen(false); handleEdit(selectedRM) }} className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors">Edit Relationship Manager</button>
+                <button onClick={() => { setIsDetailModalOpen(false); handleCreateAgentForRM(selectedRM) }} className="w-full px-4 py-2 bg-primary-700 text-white rounded-lg hover:bg-primary-600 transition-colors">Create Agent</button>
+              </div>
             </div>
           </div>
         )}
@@ -483,6 +697,16 @@ const RelationshipManagers = () => {
         cancelText="Cancel"
         type="danger"
       />
+      <Modal isOpen={isCreateAgentModalOpen} onClose={() => { setIsCreateAgentModalOpen(false); setSelectedRM(null) }} title={`Create Agent${selectedRM ? ` for ${selectedRM.name}` : ''}`} size="md">
+        <AgentForm
+          onSave={handleCreateAgentSave}
+          onClose={() => { setIsCreateAgentModalOpen(false); setSelectedRM(null) }}
+          isSaving={isCreatingAgent}
+          fixedManagedBy={selectedRM ? (selectedRM._id || selectedRM.id) : null}
+          fixedManagedByModel="RelationshipManager"
+          hideManagedBySelector={true}
+        />
+      </Modal>
     </div>
   )
 }

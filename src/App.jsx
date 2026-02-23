@@ -18,7 +18,9 @@ import Payouts from './pages/Payouts'
 import Settings from './pages/Settings'
 import Help from './pages/Help'
 import RegionalManagers from './pages/RegionalManagers'
-import BankManagers from './pages/BankManagers'
+import LeadForms from './pages/LeadForms'
+import AccountantManagers from './pages/AccountantManagers'
+import History from './pages/History'
 
 function App() {
   const [notifications, setNotifications] = useState([])
@@ -61,7 +63,9 @@ function App() {
           <Route path="franchises" element={<Franchises />} />
           <Route path="relationship-managers" element={<RelationshipManagers />} />
           <Route path="regional-managers" element={<RegionalManagers />} />
-          <Route path="bank-managers" element={<BankManagers />} />
+          <Route path="accountant-managers" element={<AccountantManagers />} />
+          <Route path="lead-forms" element={<LeadForms />} />
+          <Route path="history" element={<History />} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="payouts" element={<Payouts />} />
           <Route path="settings" element={<Settings />} />

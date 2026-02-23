@@ -335,32 +335,24 @@ const Banks = () => {
         <StatCard
           title="Total Banks"
           value={totalBanks}
-          change="+1 this quarter"
-          changeType="positive"
           icon={Building2}
           color="blue"
         />
         <StatCard
           title="Active Banks"
           value={activeBanks}
-          change={`${((activeBanks / totalBanks) * 100).toFixed(0)}% active`}
-          changeType="positive"
           icon={TrendingUp}
           color="green"
         />
         <StatCard
           title="Total Loans"
           value={totalLoans}
-          change="+12.5%"
-          changeType="positive"
           icon={FileText}
           color="orange"
         />
         <StatCard
           title="Active Loans"
           value={activeLoans}
-          change={`${((activeLoans / totalLoans) * 100).toFixed(0)}% of total`}
-          changeType="positive"
           icon={FileText}
           color="purple"
         />

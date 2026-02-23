@@ -7,7 +7,6 @@ import {
   Users,
   UserCheck,
   Building2,
-  Landmark,
   Store,
   FileText,
   CreditCard,
@@ -15,7 +14,8 @@ import {
   ChevronRight,
   Settings,
   HelpCircle,
-  MapPin
+  MapPin,
+  History
 } from 'lucide-react'
 
 const Sidebar = ({ onMinimizeChange }) => {
@@ -34,14 +34,16 @@ const Sidebar = ({ onMinimizeChange }) => {
   const allMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent', 'accounts_manager'] },
     { icon: MapPin, label: 'Regional Manager', path: '/regional-managers', roles: ['super_admin'] },
-    { icon: Store, label: 'Franchises', path: '/franchises', roles: ['super_admin', 'regional_manager'] },
-    { icon: Users, label: 'Relationship Managers', path: '/relationship-managers', roles: ['super_admin', 'regional_manager'] },
-    { icon: UserCheck, label: 'Agents', path: '/agents', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise'] },
-    { icon: Users, label: 'Leads', path: '/leads', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent'] },
+    { icon: Store, label: 'Franchises', path: '/franchises', roles: ['super_admin', 'regional_manager', 'accounts_manager'] },
+    { icon: Users, label: 'Relationship Managers', path: '/relationship-managers', roles: ['super_admin', 'regional_manager', 'accounts_manager'] },
+    { icon: UserCheck, label: 'Agents', path: '/agents', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'accounts_manager'] },
+    { icon: Users, label: 'Leads', path: '/leads', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent', 'accounts_manager'] },
     { icon: Building2, label: 'Banks', path: '/banks', roles: ['super_admin', 'regional_manager', 'relationship_manager'] },
-    { icon: Landmark, label: 'Bank Managers', path: '/bank-managers', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise'] },
+    { icon: UserCheck, label: 'Accountant Managers', path: '/accountant-managers', roles: ['super_admin'] },
     { icon: FileText, label: 'Invoices', path: '/invoices', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent', 'accounts_manager'] },
     { icon: CreditCard, label: 'Payouts', path: '/payouts', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent', 'accounts_manager'] },
+    { icon: FileText, label: 'Lead Forms', path: '/lead-forms', roles: ['super_admin', 'regional_manager'] },
+    { icon: History, label: 'History', path: '/history', roles: ['super_admin'] },
   ]
 
   const menuItems = allMenuItems.filter(item => item.roles.includes(userRole))

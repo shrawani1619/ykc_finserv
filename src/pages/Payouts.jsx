@@ -14,6 +14,11 @@ import { exportToExcel } from '../utils/exportExcel'
 const Payouts = () => {
   const userRole = authService.getUser()?.role || 'super_admin'
   const isAgent = userRole === 'agent'
+  const isAdmin = userRole === 'super_admin'
+  const isAccountant = userRole === 'accounts_manager'
+  const canCreatePayout = isAdmin || isAccountant
+  const canEditPayout = isAdmin || isAccountant
+  const canDeletePayout = isAdmin || isAccountant
 
   const [payouts, setPayouts] = useState([])
   const [agents, setAgents] = useState([])
@@ -337,13 +342,15 @@ const Payouts = () => {
             <FileDown className="w-5 h-5" />
             <span>Export to Excel</span>
           </button>
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create Payout</span>
-          </button>
+          {canCreatePayout && (
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Create Payout</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -352,32 +359,24 @@ const Payouts = () => {
         <StatCard
           title="Total Payouts"
           value={totalPayouts}
-          change="+5 this month"
-          changeType="positive"
           icon={CreditCard}
           color="blue"
         />
         <StatCard
           title="Completed"
           value={completedPayouts}
-          change={totalPayouts > 0 ? `${((completedPayouts / totalPayouts) * 100).toFixed(0)}% paid` : '0% paid'}
-          changeType="positive"
           icon={CheckCircle}
           color="green"
         />
         <StatCard
           title="Total Amount"
           value={`₹${(totalAmount / 1000).toFixed(1)}K`}
-          change="All payouts"
-          changeType="positive"
           icon={IndianRupeeIcon}
           color="orange"
         />
         <StatCard
           title="Paid Amount"
           value={`₹${(paidAmount / 1000).toFixed(1)}K`}
-          change={totalAmount > 0 ? `${((paidAmount / totalAmount) * 100).toFixed(0)}% distributed` : '0% distributed'}
-          changeType="positive"
           icon={IndianRupeeIcon}
           color="purple"
         />
@@ -547,20 +546,24 @@ const Payouts = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleEdit(payout)}
-                          className="text-gray-600 hover:text-gray-900 p-1"
-                          title="Edit"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(payout)}
-                          className="text-red-600 hover:text-red-900 p-1"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canEditPayout && (
+                          <button
+                            onClick={() => handleEdit(payout)}
+                            className="text-gray-600 hover:text-gray-900 p-1"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDeletePayout && (
+                          <button
+                            onClick={() => handleDeleteClick(payout)}
+                            className="text-red-600 hover:text-red-900 p-1"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -643,17 +646,19 @@ const Payouts = () => {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setIsDetailModalOpen(false)
-                  handleEdit(selectedPayout)
-                }}
-                className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-              >
-                Edit Payout
-              </button>
-            </div>
+            {canEditPayout && (
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setIsDetailModalOpen(false)
+                    handleEdit(selectedPayout)
+                  }}
+                  className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+                >
+                  Edit Payout
+                </button>
+              </div>
+            )}
           </div>
         )}
       </Modal>

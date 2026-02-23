@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Search, Building2, Mail, Phone, Plus, Filter, ChevronDown, ChevronUp, Users, Link2 } from 'lucide-react'
+import { MapPin, Search, Building2, Mail, Phone, Plus, Filter, ChevronDown, ChevronUp, Users, Link2, Edit, Trash2 } from 'lucide-react'
 import api from '../services/api'
 import { authService } from '../services/auth.service'
 import StatCard from '../components/StatCard'
 import Modal from '../components/Modal'
 import RegionalManagerForm from '../components/RegionalManagerForm'
+import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
 
 const RegionalManagers = () => {
@@ -19,6 +20,9 @@ const RegionalManagers = () => {
   const [franchiseFilter, setFranchiseFilter] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [selectedRM, setSelectedRM] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, rm: null })
   const [assignFranchiseRM, setAssignFranchiseRM] = useState(null)
   const [assignFranchiseIds, setAssignFranchiseIds] = useState([])
   const [assignSaving, setAssignSaving] = useState(false)
@@ -94,6 +98,40 @@ const RegionalManagers = () => {
       load()
     } catch (err) {
       toast.error('Error', err.message || 'Failed to create Regional Manager')
+    }
+  }
+
+  const handleEditRM = (rm) => {
+    setSelectedRM(rm)
+    setIsEditModalOpen(true)
+  }
+
+  const handleUpdateRM = async (data) => {
+    if (!selectedRM) return
+    try {
+      await api.users.update(selectedRM._id, data)
+      toast.success('Success', 'Regional Manager updated successfully')
+      setIsEditModalOpen(false)
+      setSelectedRM(null)
+      load()
+    } catch (err) {
+      toast.error('Error', err.message || 'Failed to update Regional Manager')
+    }
+  }
+
+  const handleDeleteClick = (rm) => {
+    setConfirmDelete({ isOpen: true, rm })
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!confirmDelete.rm) return
+    try {
+      await api.users.delete(confirmDelete.rm._id)
+      toast.success('Success', 'Regional Manager deleted successfully')
+      setConfirmDelete({ isOpen: false, rm: null })
+      load()
+    } catch (err) {
+      toast.error('Error', err.message || 'Failed to delete Regional Manager')
     }
   }
 
@@ -374,6 +412,22 @@ const RegionalManagers = () => {
                       <Users className="w-4 h-4" />
                       Assign Relationship M
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleEditRM(rm)}
+                      className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                      title="Edit Regional Manager"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteClick(rm)}
+                      className="p-2 text-red-600 hover:text-red-900 hover:bg-red-50 rounded-lg"
+                      title="Delete Regional Manager"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     <span className={`px-2 py-1 text-xs rounded-full ${rm.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
                       {rm.status || 'N/A'}
                     </span>
@@ -394,6 +448,25 @@ const RegionalManagers = () => {
           onClose={() => setIsCreateModalOpen(false)}
         />
       </Modal>
+
+      <Modal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedRM(null) }} title="Edit Regional Manager" size="md">
+        <RegionalManagerForm
+          regionalManager={selectedRM}
+          onSave={handleUpdateRM}
+          onClose={() => { setIsEditModalOpen(false); setSelectedRM(null) }}
+        />
+      </Modal>
+
+      <ConfirmModal
+        isOpen={confirmDelete.isOpen}
+        onClose={() => setConfirmDelete({ isOpen: false, rm: null })}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Regional Manager"
+        message={`Are you sure you want to delete "${confirmDelete.rm?.name || 'this regional manager'}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
 
       <Modal
         isOpen={!!assignFranchiseRM}

@@ -3,7 +3,7 @@ import { authService } from '../services/auth.service'
 import { api } from '../services/api'
 import Modal from './Modal'
 
-const FranchiseForm = ({ franchise, onSave, onClose }) => {
+const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
   const isCreate = !franchise
   const isAdmin = authService.getUser()?.role === 'super_admin'
   const canAssignRM = ['super_admin', 'regional_manager'].includes(authService.getUser()?.role)
@@ -537,9 +537,10 @@ const FranchiseForm = ({ franchise, onSave, onClose }) => {
         </button>
         <button
           type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-primary-900 rounded-lg hover:bg-primary-800 transition-colors"
+          disabled={isSaving}
+          className={`px-4 py-2 text-sm font-medium text-white bg-primary-900 rounded-lg transition-colors ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-800'}`}
         >
-          {franchise ? 'Update Franchise' : 'Create Franchise'}
+          {isSaving ? (franchise ? 'Updating...' : 'Creating...') : (franchise ? 'Update Franchise' : 'Create Franchise')}
         </button>
       </div>
     </form>

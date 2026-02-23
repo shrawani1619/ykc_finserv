@@ -278,32 +278,24 @@ const Staff = () => {
         <StatCard
           title="Total Staff"
           value={totalStaff}
-          change="+1 this month"
-          changeType="positive"
           icon={Users}
           color="blue"
         />
         <StatCard
           title="Active Staff"
           value={activeStaff}
-          change={`${((activeStaff / totalStaff) * 100).toFixed(0)}% active`}
-          changeType="positive"
           icon={Users}
           color="green"
         />
         <StatCard
           title="Departments"
           value={departments.length}
-          change={`${departments.length} active`}
-          changeType="positive"
           icon={Building2}
           color="orange"
         />
         <StatCard
           title="Total Salary"
           value={`₹${(totalSalary / 1000).toFixed(0)}K`}
-          change="Monthly payroll"
-          changeType="positive"
           icon={IndianRupeeIcon}
           color="purple"
         />

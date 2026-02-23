@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { Bell } from 'lucide-react'
 import ProfileDropdown from './ProfileDropdown'
+import NotificationDropdown from './NotificationDropdown'
 import { authService } from '../services/auth.service'
 import api from '../services/api'
 
@@ -116,6 +118,29 @@ const Header = () => {
 
       {/* Right Section */}
       <div className="flex items-center gap-4 pr-0 flex-shrink-0 relative">
+        {/* Notification Bell */}
+        <div className="relative z-[110]" ref={notificationRef}>
+          <button
+            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+            className="relative w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            title="Notifications"
+          >
+            <Bell className="w-5 h-5 text-gray-600" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+          <NotificationDropdown
+            isOpen={isNotificationOpen}
+            onClose={() => setIsNotificationOpen(false)}
+            unreadCount={unreadCount}
+            setUnreadCount={setUnreadCount}
+          />
+        </div>
+
+        {/* Profile Dropdown */}
         <div className="relative z-[110]" ref={profileRef}>
           <button
             onClick={() => setIsProfileOpen(!isProfileOpen)}

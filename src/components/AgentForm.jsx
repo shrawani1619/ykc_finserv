@@ -3,10 +3,10 @@ import api from '../services/api'
 import { authService } from '../services/auth.service'
 import Modal from './Modal'
 
-const AgentForm = ({ agent, onSave, onClose }) => {
+const AgentForm = ({ agent, onSave, onClose, isSaving = false, fixedManagedBy = null, fixedManagedByModel = null, hideManagedBySelector = false }) => {
   const currentUser = useMemo(() => authService.getUser(), [])
 
-  const defaultManagedByModel = currentUser?.role === 'franchise' ? 'Franchise' : 'Franchise'
+  const defaultManagedByModel = currentUser?.role === 'franchise' ? 'Franchise' : (currentUser?.role === 'relationship_manager' ? 'RelationshipManager' : 'Franchise')
 
   const [formData, setFormData] = useState({
     name: '',
@@ -58,20 +58,7 @@ const AgentForm = ({ agent, onSave, onClose }) => {
       }
     }
 
-    const fetchFranchises = async () => {
-      try {
-        setLoadingFranchises(true)
-        const response = await api.franchises.getActive()
-        const data = response.data || response || []
-        if (Array.isArray(data)) {
-          setFranchises(data)
-        }
-      } catch (error) {
-        console.error('Failed to fetch franchises:', error)
-      } finally {
-        setLoadingFranchises(false)
-      }
-    }
+    // Only fetch relationship managers on mount. Franchises will be loaded lazily when the user interacts
     const fetchRelationshipManagers = async () => {
       try {
         setLoadingRMs(true)
@@ -85,9 +72,43 @@ const AgentForm = ({ agent, onSave, onClose }) => {
       }
     }
 
-    fetchFranchises()
     fetchRelationshipManagers()
   }, [])
+
+  // If the logged in user is a relationship manager, default ownership to them and hide selector (unless overridden by prop)
+  useEffect(() => {
+    if (!agent && currentUser && currentUser.role === 'relationship_manager' && !fixedManagedBy) {
+      setFormData(prev => ({
+        ...prev,
+        managedByModel: 'RelationshipManager',
+        managedBy: currentUser._id || currentUser.id || '',
+      }))
+      // show RM name if available
+      if (currentUser.name) setRmSearch(currentUser.name)
+    }
+  }, [agent, currentUser, fixedManagedBy])
+
+  // Fetch franchises lazily when needed (e.g., when the franchise search input is focused)
+  const fetchFranchises = async () => {
+    try {
+      setLoadingFranchises(true)
+      const response = await api.franchises.getActive()
+      const data = response.data || response || []
+      if (Array.isArray(data)) {
+        setFranchises(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch franchises:', error)
+    } finally {
+      setLoadingFranchises(false)
+    }
+  }
+
+  const loadFranchisesIfNeeded = () => {
+    if (franchises.length === 0 && !loadingFranchises) {
+      fetchFranchises()
+    }
+  }
 
   useEffect(() => {
     if (agent) {
@@ -126,8 +147,26 @@ const AgentForm = ({ agent, onSave, onClose }) => {
     }
   }, [agent, franchises])
 
+  // If parent context provides fixed managedBy, set it on mount (for create-from-RM or create-from-Franchise flows)
+  useEffect(() => {
+    if (!agent && fixedManagedBy) {
+      setFormData(prev => ({
+        ...prev,
+        managedBy: fixedManagedBy,
+        managedByModel: fixedManagedByModel || prev.managedByModel,
+      }))
+      // set display search strings if name known in passed context (optional)
+      if (fixedManagedByModel === 'Franchise' && fixedManagedBy?.name) {
+        setFranchiseSearch(fixedManagedBy.name)
+      } else if (fixedManagedByModel === 'RelationshipManager' && fixedManagedBy?.name) {
+        setRmSearch(fixedManagedBy.name)
+      }
+    }
+  }, [agent, fixedManagedBy, fixedManagedByModel])
+
   // Whether the current user should be restricted to their own franchise
   const isFranchiseCreator = currentUser?.role === 'franchise'
+  const effectiveHideManagedBySelector = typeof hideManagedBySelector === 'boolean' ? hideManagedBySelector : (currentUser?.role === 'relationship_manager')
 
   const validate = (dataParam) => {
     const newErrors = {}
@@ -375,34 +414,41 @@ const AgentForm = ({ agent, onSave, onClose }) => {
           Managed By <span className="text-red-500">*</span>
         </label>
         <div className="flex gap-3 mb-2">
-          {!isFranchiseCreator && (
-            <>
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  name="managedByModel"
-                  value="Franchise"
-                  checked={formData.managedByModel === 'Franchise'}
-                  onChange={() => setFormData(prev => ({ ...prev, managedByModel: 'Franchise', managedBy: '' }))}
-                  className="mr-2"
-                />
-                Franchise
-              </label>
-              <label className="inline-flex items-center">
-                <input
-                  type="radio"
-                  name="managedByModel"
-                  value="RelationshipManager"
-                  checked={formData.managedByModel === 'RelationshipManager'}
-                  onChange={() => setFormData(prev => ({ ...prev, managedByModel: 'RelationshipManager', managedBy: '' }))}
-                  className="mr-2"
-                />
-                Relationship Manager
-              </label>
-            </>
-          )}
-          {isFranchiseCreator && (
-            <div className="text-sm text-gray-700">Associated with your franchise</div>
+          {!effectiveHideManagedBySelector ? (
+            !isFranchiseCreator ? (
+              <>
+                <label className="inline-flex items-center">
+                  <input
+                    type="radio"
+                    name="managedByModel"
+                    value="Franchise"
+                    checked={formData.managedByModel === 'Franchise'}
+                    onChange={() => setFormData(prev => ({ ...prev, managedByModel: 'Franchise', managedBy: '' }))}
+                    className="mr-2"
+                  />
+                  Franchise
+                </label>
+                <label className="inline-flex items-center">
+                  <input
+                    type="radio"
+                    name="managedByModel"
+                    value="RelationshipManager"
+                    checked={formData.managedByModel === 'RelationshipManager'}
+                    onChange={() => setFormData(prev => ({ ...prev, managedByModel: 'RelationshipManager', managedBy: '' }))}
+                    className="mr-2"
+                  />
+                  Relationship Manager
+                </label>
+              </>
+            ) : (
+              <div className="text-sm text-gray-700">Associated with your franchise</div>
+            )
+          ) : (
+            // When selector is hidden because the parent context fixes ownership,
+            // show a small label indicating the fixed association.
+            <div className="text-sm text-gray-700">
+              {formData.managedByModel === 'Franchise' ? 'Associated with Franchise' : 'Associated with Relationship Manager'}
+            </div>
           )}
         </div>
 
@@ -412,7 +458,7 @@ const AgentForm = ({ agent, onSave, onClose }) => {
               type="text"
               value={franchiseSearch}
               onChange={handleFranchiseSearchChange}
-              onFocus={() => setShowSuggestions(true)}
+              onFocus={() => { setShowSuggestions(true); loadFranchisesIfNeeded(); }}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.managedBy ? 'border-red-500' : 'border-gray-300'
                 }`}
@@ -420,7 +466,7 @@ const AgentForm = ({ agent, onSave, onClose }) => {
               autoComplete="off"
               readOnly={isFranchiseCreator}
             />
-            {showSuggestions && (
+            {!effectiveHideManagedBySelector && showSuggestions && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {loadingFranchises ? (
                   <div className="px-3 py-2 text-sm text-gray-500">Loading...</div>
@@ -457,7 +503,7 @@ const AgentForm = ({ agent, onSave, onClose }) => {
               autoComplete="off"
               readOnly={isFranchiseCreator}
             />
-            {showSuggestions && (
+            {!effectiveHideManagedBySelector && showSuggestions && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {loadingRMs ? (
                   <div className="px-3 py-2 text-sm text-gray-500">Loading...</div>
@@ -650,9 +696,10 @@ const AgentForm = ({ agent, onSave, onClose }) => {
         </button>
         <button
           type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-primary-900 rounded-lg hover:bg-primary-800 transition-colors"
+          disabled={isSaving}
+          className={`px-4 py-2 text-sm font-medium text-white bg-primary-900 rounded-lg hover:bg-primary-800 transition-colors ${isSaving ? 'opacity-60 cursor-not-allowed' : ''}`}
         >
-          {agent ? 'Update Agent' : 'Create Agent'}
+          {isSaving ? (agent ? 'Updating...' : 'Creating...') : (agent ? 'Update Agent' : 'Create Agent')}
         </button>
       </div>
     </form>

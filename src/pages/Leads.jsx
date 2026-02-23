@@ -1,20 +1,30 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Copy, Settings2, History, X, FileDown } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Copy, Settings2, History, X, FileDown, CheckCircle } from 'lucide-react'
 import api from '../services/api'
 import { authService } from '../services/auth.service'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import LeadForm from '../components/LeadForm'
 import ConfirmModal from '../components/ConfirmModal'
+import DisbursementEmailModal from '../components/DisbursementEmailModal'
 import { toast } from '../services/toastService'
 import { exportToExcel } from '../utils/exportExcel'
+import { canExportData } from '../utils/roleUtils'
+import AccountantLeads from './AccountantLeads'
 
 const Leads = () => {
   const userRole = authService.getUser()?.role || 'super_admin'
   const isAgent = userRole === 'agent'
+  const isAccountant = userRole === 'accounts_manager'
   const canViewHistory = ['super_admin', 'relationship_manager', 'franchise', 'agent'].includes(userRole)
   const canEdit = !isAgent
   const canCreate = true // Agents can create leads
+  const canSendDisbursementEmail = userRole !== 'agent' // All roles except agent can send
+
+  // Render AccountantLeads for accountants
+  if (isAccountant) {
+    return <AccountantLeads />
+  }
 
   const [leads, setLeads] = useState([])
   const [agents, setAgents] = useState([])
@@ -29,6 +39,7 @@ const Leads = () => {
   const [agentFilter, setAgentFilter] = useState('')
   const [bankFilter, setBankFilter] = useState('')
   const [dsaCodeFilter, setDsaCodeFilter] = useState('')
+  const [loanTypeFilter, setLoanTypeFilter] = useState('all')
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -42,6 +53,9 @@ const Leads = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const [expandedFields, setExpandedFields] = useState({})
   const [showColumnSettings, setShowColumnSettings] = useState(false)
+  const [isDisbursementEmailModalOpen, setIsDisbursementEmailModalOpen] = useState(false)
+  const [selectedLeadForEmail, setSelectedLeadForEmail] = useState(null)
+
 
   // Column configuration with all available fields
   const [columnConfig, setColumnConfig] = useState(() => {
@@ -267,6 +281,10 @@ const Leads = () => {
         const code = (lead.dsaCode ?? lead.codeUse ?? '').toString().toLowerCase()
         if (!code.includes(dsaCodeFilter.trim().toLowerCase())) return false
       }
+      if (loanTypeFilter && loanTypeFilter !== 'all') {
+        const leadType = (lead.loanType ?? '').toString().replace(/_/g, ' ').toLowerCase()
+        if (!leadType.includes(loanTypeFilter.trim().toLowerCase())) return false
+      }
 
       if (!hasSearch) return true
 
@@ -284,9 +302,9 @@ const Leads = () => {
         loanAccountNo.toLowerCase().includes(searchLower)
       )
     })
-  }, [leads, searchTerm, statusFilter, franchiseFilter, agentFilter, bankFilter, dsaCodeFilter])
+  }, [leads, searchTerm, statusFilter, franchiseFilter, agentFilter, bankFilter, dsaCodeFilter, loanTypeFilter])
 
-  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== '' || bankFilter !== '' || dsaCodeFilter.trim() !== ''
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== '' || bankFilter !== '' || dsaCodeFilter.trim() !== '' || (loanTypeFilter && loanTypeFilter !== 'all')
   const clearLeadsFilters = () => {
     setSearchTerm('')
     setStatusFilter('all')
@@ -294,6 +312,7 @@ const Leads = () => {
     setAgentFilter('')
     setBankFilter('')
     setDsaCodeFilter('')
+    setLoanTypeFilter('all')
   }
 
   // Sort leads
@@ -374,6 +393,11 @@ const Leads = () => {
     } finally {
       setHistoryLoading(false)
     }
+  }
+
+  const handleDisbursementEmail = (lead) => {
+    setSelectedLeadForEmail(lead)
+    setIsDisbursementEmailModalOpen(true)
   }
 
   const toggleHistoryItem = (index) => {
@@ -480,42 +504,57 @@ const Leads = () => {
   }
 
   const handleSave = async (formData) => {
-        try {
+    try {
+      const isNewLead = formData.leadType === 'new_lead';
+
       // Validate required fields (only fields with red asterisk)
-      if (!formData.loanType) {
-        toast.error('Error', 'Loan type is required')
-        return
-      }
-      if (!formData.loanAmount || formData.loanAmount <= 0) {
-        toast.error('Error', 'Loan amount must be greater than 0')
-        return
-      }
-      if (!formData.bankId) {
+      // Bank not required for new_lead type
+      if (!isNewLead && !formData.bankId) {
         toast.error('Error', 'Bank is required')
         return
+      }
+      // If this is the legacy (predefined) payload (no bank-specific form), require loanType and loanAmount.
+      // Skip for new_lead - no bank-specific fields required.
+      if (!isNewLead && !formData.leadForm) {
+        if (!formData.loanType) {
+          toast.error('Error', 'Loan type is required')
+          return
+        }
+        if (!formData.loanAmount || formData.loanAmount <= 0) {
+          toast.error('Error', 'Loan amount must be greater than 0')
+          return
+        }
       }
 
       // Map form data to backend API format
       const leadData = {
+        leadType: formData.leadType || 'bank',
         caseNumber: formData.caseNumber?.trim() || undefined,
         applicantMobile: formData.applicantMobile?.trim() || undefined,
         applicantEmail: formData.applicantEmail?.trim() || undefined,
         loanType: formData.loanType,
-        loanAmount: parseFloat(formData.loanAmount),
+        loanAmount: formData.loanAmount ? parseFloat(formData.loanAmount) : undefined,
         status: formData.status || 'logged',
         agent: formData.agentId || formData.agent || undefined,
         // Support both shapes: payload may include `associated` (from LeadForm) or `associatedId`
         associated: formData.associated || formData.associatedId || formData.franchiseId || undefined,
         associatedModel: formData.associatedModel || (formData.franchiseId ? 'Franchise' : undefined),
-        bank: formData.bankId,
+        bank: formData.bankId || formData.bank || undefined,
+        leadForm: formData.leadForm || undefined,
+        formValues: formData.formValues || undefined,
+        documents: formData.documents || undefined,
         customerName: formData.customerName?.trim() || undefined,
         sanctionedDate: formData.sanctionedDate || undefined,
         disbursedAmount: formData.disbursedAmount ? parseFloat(formData.disbursedAmount) : undefined,
         disbursementDate: formData.disbursementDate || undefined,
         disbursementType: formData.disbursementType || undefined,
         loanAccountNo: formData.loanAccountNo?.trim() || undefined,
-        commissionBasis: formData.commissionBasis || undefined,
-        commissionPercentage: formData.commissionPercentage ? parseFloat(formData.commissionPercentage) : undefined,
+        // Only Relationship Manager and Accounts Manager can set commission
+        ...(userRole === 'relationship_manager' || userRole === 'accounts_manager' ? {
+          commissionBasis: formData.commissionBasis || undefined,
+          commissionPercentage: formData.commissionPercentage ? parseFloat(formData.commissionPercentage) : undefined,
+          commissionAmount: formData.commissionAmount ? parseFloat(formData.commissionAmount) : undefined,
+        } : {}),
         smBm: formData.smBmId || undefined,
         smBmEmail: formData.smBmEmail?.trim() || undefined,
         smBmMobile: formData.smBmMobile?.trim() || undefined,
@@ -525,6 +564,13 @@ const Leads = () => {
         dsaCode: formData.dsaCode?.trim() || formData.codeUse?.trim() || undefined,
         branch: formData.branch?.trim() || undefined,
         remarks: formData.remarks?.trim() || undefined,
+      }
+
+      // Auto-assign the agent for newly created leads to the current user
+      // (only when creating, not when updating an existing lead)
+      const currentUser = authService.getUser()
+      if (!selectedLead) {
+        leadData.agent = leadData.agent || currentUser?._id || currentUser?.id || currentUser?.userId || undefined
       }
 
       console.log('🔍 DEBUG: Form data received:', formData)
@@ -823,13 +869,14 @@ const Leads = () => {
           <p className="text-sm text-gray-600 mt-1">Manage and track all loan leads</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              const rows = sortedLeads.map((lead) => {
-                const base = {
+          {canExportData() && (
+            <button
+              onClick={() => {
+                const rows = sortedLeads.map((lead) => {
+                  const base = {
                   'Customer Name': lead.customerName || 'N/A',
                   'Loan Type': lead.loanType?.replace(/_/g, ' ') || 'N/A',
-                  'Loan Amount': lead.loanAmount ?? '',
+                  'Loan Amount': lead.loanAmount || lead.amount || '',
                   'Disbursed Amount': lead.disbursedAmount ?? '',
                   Status: lead.status || 'N/A',
                   Bank: lead.bank?.name || getBankName(lead.bankId || lead.bank) || 'N/A',
@@ -862,6 +909,7 @@ const Leads = () => {
             <FileDown className="w-5 h-5" />
             <span>Export to Excel</span>
           </button>
+          )}
           <div className="relative">
             <button
               data-column-settings-button
@@ -889,34 +937,34 @@ const Leads = () => {
                       return true
                     })
                     .map((col, index) => (
-                    <div key={col.key} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
-                      <div className="flex flex-col gap-0.5">
-                        <button
-                          onClick={() => moveColumn(index, 'up')}
-                          disabled={index === 0}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                          title="Move up"
-                        >
-                          <ChevronUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => moveColumn(index, 'down')}
-                          disabled={index === columnConfig.length - 1}
-                          className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-                          title="Move down"
-                        >
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
+                      <div key={col.key} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded">
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            onClick={() => moveColumn(index, 'up')}
+                            disabled={index === 0}
+                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move up"
+                          >
+                            <ChevronUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => moveColumn(index, 'down')}
+                            disabled={index === columnConfig.length - 1}
+                            className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move down"
+                          >
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={col.visible}
+                          onChange={() => toggleColumnVisibility(col.key)}
+                          className="w-4 h-4 text-primary-900 rounded"
+                        />
+                        <span className="flex-1 text-sm text-gray-700">{col.label}</span>
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={col.visible}
-                        onChange={() => toggleColumnVisibility(col.key)}
-                        className="w-4 h-4 text-primary-900 rounded"
-                      />
-                      <span className="flex-1 text-sm text-gray-700">{col.label}</span>
-                    </div>
-                  ))}
+                    ))}
                 </div>
                 <button
                   onClick={() => setShowColumnSettings(false)}
@@ -1035,6 +1083,20 @@ const Leads = () => {
                   onChange={(e) => setDsaCodeFilter(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Loan Type</label>
+                <select
+                  value={loanTypeFilter}
+                  onChange={(e) => setLoanTypeFilter(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All</option>
+                  <option value="personal">Personal</option>
+                  <option value="home">Home</option>
+                  <option value="vehicle">Vehicle</option>
+                  <option value="business">Business</option>
+                </select>
               </div>
             </div>
             {hasActiveFilters && (
@@ -1167,16 +1229,17 @@ const Leads = () => {
                       case 'loanType':
                         return <div className="text-sm text-gray-900">{lead.loanType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}</div>
                       case 'loanAmount':
-                        return <div className="text-sm font-medium text-gray-900">₹{(lead.loanAmount || 0).toLocaleString()}</div>
+                        return <div className="text-sm font-medium text-gray-900">₹{(lead.loanAmount || lead.amount || 0).toLocaleString()}</div>
                       // 'sanctionedAmount' column removed
                       case 'disbursedAmount':
-                        return <div className="text-sm text-gray-900">₹{(lead.disbursedAmount || 0).toLocaleString()}</div>
+                        return <div className="text-sm font-medium text-gray-900">₹{(lead.disbursedAmount || 0).toLocaleString()}</div>
                       case 'status':
                         return <StatusBadge status={lead.status || 'logged'} />
                       case 'agent':
                         return (
                           <div className="text-sm text-gray-900">
                             {(() => {
+                              if (lead.agentName) return lead.agentName;
                               if (lead.agent && typeof lead.agent === 'object' && lead.agent.name) {
                                 return lead.agent.name
                               }
@@ -1467,6 +1530,30 @@ const Leads = () => {
                                 <History className="w-4 h-4" />
                               </button>
                             )}
+                            {canSendDisbursementEmail && lead.status === 'disbursed' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDisbursementEmail(lead)
+                                }}
+                                className="text-blue-600 hover:text-blue-800 p-1"
+                                title="Disbursement Confirmation"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                            {isAgent && (lead.status === 'logged') && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleStatusUpdate(lead.id || lead._id, 'disbursed')
+                                }}
+                                className="text-xs bg-primary-900 text-white px-3 py-1 rounded hover:bg-primary-800 transition-colors"
+                                title="Mark as Disbursed"
+                              >
+                                Mark Disbursed
+                              </button>
+                            )}
                             {canEdit && (
                               <>
                                 <button
@@ -1580,7 +1667,7 @@ const Leads = () => {
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Loan Amount</label>
-                <p className="mt-1 text-sm text-gray-900">₹{(selectedLead.loanAmount || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-gray-900">₹{(selectedLead.loanAmount || selectedLead.amount || 0).toLocaleString()}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Status</label>
@@ -1592,6 +1679,7 @@ const Leads = () => {
                 <label className="text-sm font-medium text-gray-500">Agent</label>
                 <p className="mt-1 text-sm text-gray-900">
                   {(() => {
+                    if (selectedLead.agentName) return selectedLead.agentName;
                     // Check if agent is populated object
                     if (selectedLead.agent && typeof selectedLead.agent === 'object' && selectedLead.agent.name) {
                       return selectedLead.agent.name
@@ -1712,6 +1800,16 @@ const Leads = () => {
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"
+      />
+
+      {/* Disbursement Email Modal */}
+      <DisbursementEmailModal
+        isOpen={isDisbursementEmailModalOpen}
+        onClose={() => {
+          setIsDisbursementEmailModalOpen(false)
+          setSelectedLeadForEmail(null)
+        }}
+        leadId={selectedLeadForEmail?.id || selectedLeadForEmail?._id}
       />
 
       {/* History Sidebar */}

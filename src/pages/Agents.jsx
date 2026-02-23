@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, Users, ChevronDown, ChevronUp, FileDown } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, Users, ChevronDown, ChevronUp, FileDown, UserCheck } from 'lucide-react'
 import IndianRupeeIcon from '../components/IndianRupeeIcon'
 import api from '../services/api'
 import { authService } from '../services/auth.service'
@@ -27,6 +27,8 @@ const Agents = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState(null)
+  const [selectedAgentDocuments, setSelectedAgentDocuments] = useState([])
+  const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, agent: null })
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
@@ -176,6 +178,8 @@ const Agents = () => {
     return sum + stats.commission
   }, 0)
   const totalLeads = leads.length
+  const totalLeadsCount = totalLeads
+  const avgCommission = totalAgents > 0 ? Math.round(totalCommission / totalAgents) : 0
 
   // Filter and search agents
   const filteredAgents = useMemo(() => {
@@ -268,7 +272,31 @@ const Agents = () => {
     setIsDetailModalOpen(true)
   }
 
+  // Fetch documents for selected agent when detail modal opens
+  useEffect(() => {
+    const fetchAgentDocuments = async () => {
+      if (!selectedAgent || !isDetailModalOpen) return
+      const agentId = selectedAgent._id || selectedAgent.id
+      if (!agentId) {
+        setSelectedAgentDocuments([])
+        return
+      }
+      try {
+        const resp = await api.documents.list('user', agentId)
+        // Controller returns { success, data, pagination }
+        const docs = (resp && resp.data) || resp || []
+        setSelectedAgentDocuments(Array.isArray(docs) ? docs : [])
+      } catch (err) {
+        console.error('Error fetching agent documents:', err)
+        setSelectedAgentDocuments([])
+      }
+    }
+
+    fetchAgentDocuments()
+  }, [selectedAgent, isDetailModalOpen])
+
   const handleSave = async (formData, files = {}) => {
+    setIsSaving(true)
     try {
       if (selectedAgent) {
         // Update existing agent
@@ -367,6 +395,8 @@ const Agents = () => {
     } catch (error) {
       console.error('Error saving agent:', error)
       toast.error('Error', error.message || 'Failed to save agent')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -501,34 +531,26 @@ const Agents = () => {
         <StatCard
           title="Total Agents"
           value={totalAgents}
-          change="+2 this month"
-          changeType="positive"
-          icon={Users}
+          icon={UserCheck}
           color="blue"
         />
         <StatCard
           title="Active Agents"
           value={activeAgents}
-          change={`${((activeAgents / totalAgents) * 100).toFixed(0)}% active`}
-          changeType="positive"
           icon={TrendingUp}
           color="green"
         />
         <StatCard
           title="Total Leads"
-          value={totalLeads}
-          change="+15.2%"
-          changeType="positive"
+          value={totalLeadsCount}
           icon={Users}
           color="orange"
         />
         <StatCard
-          title="Total Commission"
-          value={`₹${(totalCommission / 1000).toFixed(1)}K`}
-          change="+8.5%"
-          changeType="positive"
+          title="Avg. Commission"
+          value={`₹${avgCommission.toLocaleString()}`}
           icon={IndianRupeeIcon}
-          color="purple"
+          color="green"
         />
       </div>
 
@@ -791,7 +813,7 @@ const Agents = () => {
         onClose={() => setIsCreateModalOpen(false)}
         title="Create New Agent"
       >
-        <AgentForm onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} />
+        <AgentForm onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} isSaving={isSaving} />
       </Modal>
 
       {/* Edit Modal */}
@@ -803,7 +825,7 @@ const Agents = () => {
         }}
         title="Edit Agent"
       >
-        <AgentForm agent={selectedAgent} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} />
+        <AgentForm agent={selectedAgent} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} isSaving={isSaving} />
       </Modal>
 
       {/* Detail Modal */}
@@ -841,6 +863,79 @@ const Agents = () => {
                 <label className="text-sm font-medium text-gray-500">Status</label>
                 <div className="mt-1">
                   <StatusBadge status={selectedAgent.status} />
+                </div>
+              </div>
+            </div>
+
+            {/* Profile / Misc details (created in create-agent form) */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Profile</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Role</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.role || 'agent'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Managed By (owner)</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.managedBy?.name || getAssociatedName(selectedAgent) || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Managed By Model</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.managedByModel || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Commission %</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.commissionPercentage ?? 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Created At</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.createdAt ? new Date(selectedAgent.createdAt).toLocaleString() : 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Last Login</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.lastLoginAt ? new Date(selectedAgent.lastLoginAt).toLocaleString() : 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* KYC details */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">KYC</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">PAN</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.kyc?.pan || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Aadhaar</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.kyc?.aadhaar || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">GST</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.kyc?.gst || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Bank details */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Bank Details</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Account Holder</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.bankDetails?.accountHolderName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Account Number</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.bankDetails?.accountNumber || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Bank Name</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedAgent.bankDetails?.bankName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Branch / IFSC</label>
+                  <p className="mt-1 text-sm text-gray-900">{(selectedAgent.bankDetails?.branch ? `${selectedAgent.bankDetails.branch} / ` : '') + (selectedAgent.bankDetails?.ifsc || '') || 'N/A'}</p>
                 </div>
               </div>
             </div>
@@ -893,6 +988,51 @@ const Agents = () => {
               >
                 Edit Agent
               </button>
+            </div>
+
+            {/* Documents preview */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Documents</h4>
+              {(selectedAgentDocuments || []).length === 0 ? (
+                <p className="text-sm text-gray-500">No documents uploaded for this agent.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {(selectedAgentDocuments || []).map((doc) => {
+                    const src = doc.url || `/api/documents/${doc._id}/download`
+                    const isImage = doc.mimeType && doc.mimeType.startsWith && doc.mimeType.startsWith('image')
+                    return (
+                      <div key={doc._id || doc.id} className="border rounded-md p-2 text-center">
+                        <div className="text-xs font-medium text-gray-700 mb-1">{doc.documentType || doc.description || (doc.originalFileName || 'Document')}</div>
+                        {isImage ? (
+                          // eslint-disable-next-line jsx-a11y/img-redundant-alt
+                          <img
+                            src={src}
+                            alt={doc.originalFileName || 'image'}
+                            className="mx-auto max-h-28 object-contain cursor-pointer"
+                            onClick={() => window.open(src, '_blank')}
+                          />
+                        ) : (
+                          <div className="text-sm text-gray-600">
+                            <a href={src} target="_blank" rel="noreferrer" className="underline text-primary-700">{doc.originalFileName || 'View document'}</a>
+                          </div>
+                        )}
+                        {(doc.verificationStatus && doc.verificationStatus !== 'pending') ? (
+                          <div
+                            className={`mt-2 text-xs font-semibold ${doc.verificationStatus === 'verified'
+                              ? 'text-green-600'
+                              : doc.verificationStatus === 'rejected'
+                                ? 'text-red-600'
+                                : 'text-gray-500'
+                              }`}
+                          >
+                            {doc.verificationStatus === 'verified' ? 'Verified' : doc.verificationStatus === 'rejected' ? 'Rejected' : doc.verificationStatus}
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

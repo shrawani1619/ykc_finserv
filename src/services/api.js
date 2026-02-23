@@ -23,11 +23,11 @@ const apiRequest = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(url, config);
-    
+
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
     let data;
-    
+
     if (contentType && contentType.includes('application/json')) {
       data = await response.json();
     } else {
@@ -37,7 +37,16 @@ const apiRequest = async (endpoint, options = {}) => {
 
     if (!response.ok) {
       const errorMessage = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
-      
+      const isNotificationEndpoint = endpoint.includes('/notifications');
+
+      // Silently handle 404 for notification endpoints (API might not be implemented yet)
+      if (response.status === 404 && isNotificationEndpoint) {
+        const apiError = new Error(errorMessage);
+        apiError._toastShown = true;
+        apiError._silent = true; // Flag to suppress logging
+        throw apiError;
+      }
+
       // Handle 401 - redirect to login (but not for auth endpoints)
       if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
         // Clear auth data
@@ -51,15 +60,15 @@ const apiRequest = async (endpoint, options = {}) => {
         }
         throw new Error('Authentication required');
       }
-      
-      // Show toast notification for other errors (but not for auth endpoints)
+
+      // Show toast notification for other errors (but not for auth endpoints or notification 404s)
       // Only show toast here - don't show again in catch block
-      if (response.status !== 403 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
+      if (response.status !== 403 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register') && !(response.status === 404 && isNotificationEndpoint)) {
         toast.error('Error', errorMessage);
       } else if (response.status === 403) {
         toast.error('Permission Denied', errorMessage || 'You do not have permission to perform this action');
       }
-      
+
       // Create error with a flag to prevent duplicate toast
       const apiError = new Error(errorMessage);
       apiError._toastShown = true;
@@ -72,21 +81,21 @@ const apiRequest = async (endpoint, options = {}) => {
     if (error._toastShown) {
       throw error;
     }
-    
+
     // Check if it's a connection error
     const isConnectionError = error.message && (
-      error.message.includes('Failed to fetch') || 
+      error.message.includes('Failed to fetch') ||
       error.message.includes('NetworkError') ||
       error.name === 'TypeError'
     );
-    
+
     // Only log connection errors once to reduce spam
     if (isConnectionError) {
       // Check if we've already shown an error for this endpoint recently
       const errorKey = `connection_error_${endpoint}`;
       const lastErrorTime = sessionStorage.getItem(errorKey);
       const now = Date.now();
-      
+
       // Only show error if we haven't shown it in the last 5 seconds
       if (!lastErrorTime || (now - parseInt(lastErrorTime)) > 5000) {
         console.error('API Connection Error:', {
@@ -95,7 +104,7 @@ const apiRequest = async (endpoint, options = {}) => {
           message: 'Backend server is not running or not accessible. Please ensure the server is started on port 5000.'
         });
         sessionStorage.setItem(errorKey, now.toString());
-        
+
         // Only show toast for connection errors, and not for auth endpoints or notification polling
         // Don't show toast for notification endpoints as they poll frequently
         const isNotificationEndpoint = endpoint.includes('/notifications/');
@@ -105,9 +114,12 @@ const apiRequest = async (endpoint, options = {}) => {
       }
     } else {
       // Log other errors normally (but don't show toast if already shown)
-      console.error('API Error:', error);
+      // Suppress logging for silent errors (like 404 on notification endpoints)
+      if (!error._silent) {
+        console.error('API Error:', error);
+      }
     }
-    
+
     // Re-throw with more context
     if (error.message) {
       throw error;
@@ -123,7 +135,7 @@ export const api = {
     login: async (credentials) => {
       // Login doesn't require token, so make direct request
       const url = `${API_BASE_URL}/auth/login`;
-      
+
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -136,7 +148,7 @@ export const api = {
 
         const contentType = response.headers.get('content-type');
         let data;
-        
+
         if (contentType && contentType.includes('application/json')) {
           data = await response.json();
         } else {
@@ -161,7 +173,7 @@ export const api = {
     register: async (userData) => {
       // Register doesn't require token - use signup endpoint
       const url = `${API_BASE_URL}/auth/signup`;
-      
+
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -174,7 +186,7 @@ export const api = {
 
         const contentType = response.headers.get('content-type');
         let data;
-        
+
         if (contentType && contentType.includes('application/json')) {
           data = await response.json();
         } else {
@@ -210,6 +222,10 @@ export const api = {
       const queryString = new URLSearchParams(params).toString();
       return apiRequest(`/leads${queryString ? `?${queryString}` : ''}`);
     },
+    getApproved: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/leads/approved${queryString ? `?${queryString}` : ''}`);
+    },
     getById: (id) => apiRequest(`/leads/${id}`),
     create: (data) => apiRequest('/leads', {
       method: 'POST',
@@ -228,6 +244,18 @@ export const api = {
       const queryString = new URLSearchParams(params).toString();
       return apiRequest(`/leads/${id}/history${queryString ? `?${queryString}` : ''}`);
     },
+    addDisbursement: (id, data) => {
+      console.log('🔍 DEBUG: addDisbursement called with:', { id, data });
+      return apiRequest(`/leads/${id}/disbursement`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    getDisbursementEmailPreview: (id) => apiRequest(`/leads/${id}/disbursement-email/preview`),
+    sendDisbursementEmail: (id, data) => apiRequest(`/leads/${id}/disbursement-email/send`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   },
 
   // Agents endpoints
@@ -284,6 +312,9 @@ export const api = {
     create: (data) => apiRequest('/invoices', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+    generateFromLead: (leadId) => apiRequest(`/invoices/generate/${leadId}`, {
+      method: 'POST',
     }),
     update: (id, data) => apiRequest(`/invoices/${id}`, {
       method: 'PUT',
@@ -383,6 +414,37 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+    update: (id, data) => apiRequest(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+    delete: (id) => apiRequest(`/users/${id}`, { method: 'DELETE' }),
+    updateStatus: (id, status) => apiRequest(`/users/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
+  },
+
+  // Accountant Managers endpoints
+  accountantManagers: {
+    getAll: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/accountant-managers${queryString ? `?${queryString}` : ''}`);
+    },
+    getById: (id) => apiRequest(`/accountant-managers/${id}`),
+    create: (data) => apiRequest('/accountant-managers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+    update: (id, data) => apiRequest(`/accountant-managers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+    delete: (id) => apiRequest(`/accountant-managers/${id}`, { method: 'DELETE' }),
+    updateStatus: (id, status) => apiRequest(`/accountant-managers/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    }),
   },
 
   // Documents (file uploads)
@@ -421,6 +483,17 @@ export const api = {
 
       return data;
     },
+    /**
+     * List documents for an entity
+     * GET /documents/:entityType/:entityId
+     * @param {String} entityType
+     * @param {String} entityId
+     * @param {Object} params - optional query params (page, limit, verificationStatus)
+     */
+    list: (entityType, entityId, params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/documents/${entityType}/${entityId}${queryString ? `?${queryString}` : ''}`);
+    },
   },
 
   // Banks endpoints
@@ -447,6 +520,20 @@ export const api = {
       body: JSON.stringify(emailData),
     }),
     delete: (id) => apiRequest(`/banks/${id}`, { method: 'DELETE' }),
+  },
+
+  // Lead Forms (dynamic forms per bank)
+  leadForms: {
+    getByBank: (bankId) => apiRequest(`/lead-forms/bank/${bankId}`),
+    getNewLeadForm: () => apiRequest('/lead-forms/new-lead'),
+    create: (data) => apiRequest('/lead-forms', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => apiRequest(`/lead-forms/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    list: () => apiRequest('/lead-forms'),
+  },
+  // Field definitions (canonical keys) used by Lead Form builder
+  fieldDefs: {
+    list: () => apiRequest('/field-defs'),
+    create: (data) => apiRequest('/field-defs', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   // Dashboard endpoints
@@ -493,6 +580,71 @@ export const api = {
       body: JSON.stringify({ status }),
     }),
     delete: (id) => apiRequest(`/bank-managers/${id}`, { method: 'DELETE' }),
+  },
+
+  // Accountant Dashboard endpoints
+  accountant: {
+    // Dashboard Summary
+    getDashboard: () => apiRequest('/accountant/dashboard'),
+    
+    // Approved Leads
+    getApprovedLeads: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/accountant/leads${queryString ? `?${queryString}` : ''}`);
+    },
+    getLeadDetails: (id) => apiRequest(`/accountant/leads/${id}`),
+    
+    // Disbursements
+    addDisbursement: (leadId, data) => apiRequest(`/accountant/disbursements/${leadId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+    editDisbursement: (leadId, disbursementId, data) => apiRequest(`/accountant/disbursements/${leadId}/${disbursementId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+    deleteDisbursement: (leadId, disbursementId) => apiRequest(`/accountant/disbursements/${leadId}/${disbursementId}`, {
+      method: 'DELETE',
+    }),
+    getDisbursementHistory: (leadId) => apiRequest(`/accountant/disbursements/${leadId}/history`),
+    
+    // Lead Management (limited to accountant scope)
+    updateLeadStatus: (leadId, data) => apiRequest(`/accountant/leads/${leadId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+    addLeadNote: (leadId, data) => apiRequest(`/accountant/leads/${leadId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+    
+    // Reports
+    getCommissionReport: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/accountant/reports/commission${queryString ? `?${queryString}` : ''}`);
+    },
+  },
+
+  // History
+  history: {
+    getAll: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/history${queryString ? `?${queryString}` : ''}`);
+    },
+    getStats: () => apiRequest('/history/stats'),
+  },
+
+  // Notifications endpoints
+  notifications: {
+    getAll: (params = {}) => {
+      const queryString = new URLSearchParams(params).toString();
+      return apiRequest(`/notifications${queryString ? `?${queryString}` : ''}`);
+    },
+    getById: (id) => apiRequest(`/notifications/${id}`),
+    markAsRead: (id) => apiRequest(`/notifications/${id}/read`, { method: 'PUT' }),
+    markAllAsRead: () => apiRequest('/notifications/read-all', { method: 'PUT' }),
+    delete: (id) => apiRequest(`/notifications/${id}`, { method: 'DELETE' }),
+    getUnreadCount: () => apiRequest('/notifications/unread-count'),
   },
 };
 

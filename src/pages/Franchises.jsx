@@ -5,6 +5,7 @@ import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import FranchiseForm from '../components/FranchiseForm'
+import AgentForm from '../components/AgentForm'
 import StatCard from '../components/StatCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
@@ -25,8 +26,13 @@ const Franchises = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [selectedFranchise, setSelectedFranchise] = useState(null)
+  const [franchiseDocs, setFranchiseDocs] = useState([])
+  const [loadingFranchiseDocs, setLoadingFranchiseDocs] = useState(false)
+  const [isSavingFranchise, setIsSavingFranchise] = useState(false)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, franchise: null })
+  const [isCreateAgentModalOpen, setIsCreateAgentModalOpen] = useState(false)
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false)
 
   useEffect(() => {
     fetchFranchises()
@@ -90,6 +96,24 @@ const Franchises = () => {
     } catch (error) {
       console.error('Error fetching invoices:', error)
       setInvoices([])
+    }
+  }
+
+  const fetchFranchiseDocuments = async (franchiseId) => {
+    if (!franchiseId) {
+      setFranchiseDocs([])
+      return
+    }
+    try {
+      setLoadingFranchiseDocs(true)
+      const response = await api.documents.list('franchise', franchiseId, { limit: 100 })
+      const docs = response.data || response || []
+      setFranchiseDocs(Array.isArray(docs) ? docs : [])
+    } catch (error) {
+      console.error('Error fetching franchise documents:', error)
+      setFranchiseDocs([])
+    } finally {
+      setLoadingFranchiseDocs(false)
     }
   }
 
@@ -239,8 +263,88 @@ const Franchises = () => {
     setIsDetailModalOpen(true)
   }
 
+  const handleCreateAgentForFranchise = (franchise) => {
+    setSelectedFranchise(franchise)
+    setIsCreateAgentModalOpen(true)
+  }
+
+  const handleCreateAgentSave = async (formData, files = {}) => {
+    try {
+      setIsCreatingAgent(true)
+      const { phone, ...rest } = formData
+      const agentData = {
+        name: rest.name,
+        email: rest.email,
+        mobile: phone?.trim() || '',
+        password: rest.password || 'Agent@123',
+        role: 'agent',
+        status: rest.status || 'active',
+        managedBy: rest.managedBy || rest.franchise || rest.managedBy || '',
+        managedByModel: rest.managedByModel || (rest.franchise ? 'Franchise' : 'Franchise'),
+        kyc: rest.kyc || undefined,
+        bankDetails: rest.bankDetails || undefined,
+      }
+
+      const response = await api.agents.create(agentData)
+      const created = response.data || response
+
+      const agentId = created._id || created.id || created.data?._id
+      try {
+        const pendingFiles = files.pendingFiles || {}
+        for (const [docType, fileObj] of Object.entries(pendingFiles)) {
+          const file = fileObj?.file
+          const label = fileObj?.label
+          if (file) {
+            const fd = new FormData()
+            fd.append('file', file)
+            fd.append('entityType', 'user')
+            fd.append('entityId', agentId)
+            fd.append('documentType', docType)
+            if (label) fd.append('label', label)
+            await api.documents.upload(fd)
+          }
+        }
+        const additional = files.additionalDocuments || []
+        for (const ad of additional) {
+          const file = ad?.file
+          const label = ad?.label
+          if (file) {
+            const fd = new FormData()
+            fd.append('file', file)
+            fd.append('entityType', 'user')
+            fd.append('entityId', agentId)
+            fd.append('documentType', 'additional')
+            if (label) fd.append('label', label)
+            await api.documents.upload(fd)
+          }
+        }
+      } catch (err) {
+        console.error('Error uploading pending files for new agent:', err)
+      }
+
+      setIsCreateAgentModalOpen(false)
+      toast.success('Success', 'Agent created successfully')
+      await fetchAgents()
+    } catch (error) {
+      console.error('Error creating agent:', error)
+      toast.error('Error', error.message || 'Failed to create agent')
+    } finally {
+      setIsCreatingAgent(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isDetailModalOpen && selectedFranchise) {
+      const franchiseId = selectedFranchise.id || selectedFranchise._id
+      if (franchiseId) fetchFranchiseDocuments(franchiseId)
+    } else {
+      setFranchiseDocs([])
+    }
+  }, [isDetailModalOpen, selectedFranchise])
+
   const handleSave = async (formData, files = {}) => {
     try {
+      setIsSavingFranchise(true)
       if (selectedFranchise) {
         // Update existing franchise
         const franchiseId = selectedFranchise.id || selectedFranchise._id
@@ -309,6 +413,8 @@ const Franchises = () => {
     } catch (error) {
       console.error('Error saving franchise:', error)
       toast.error('Error', error.message || 'Failed to save franchise. Please check your connection and try again.')
+    } finally {
+      setIsSavingFranchise(false)
     }
   }
 
@@ -391,32 +497,24 @@ const Franchises = () => {
         <StatCard
           title="Total Franchises"
           value={totalFranchises}
-          change="+1 this year"
-          changeType="positive"
           icon={Store}
           color="blue"
         />
         <StatCard
           title="Active Franchises"
           value={activeFranchises}
-          change={`${((activeFranchises / totalFranchises) * 100).toFixed(0)}% active`}
-          changeType="positive"
           icon={TrendingUp}
           color="green"
         />
         <StatCard
           title="Total Agents"
           value={totalAgentsCount}
-          change="Across all franchises"
-          changeType="positive"
           icon={Users}
           color="orange"
         />
         <StatCard
           title="Total Revenue"
           value={`₹${(totalRevenue / 1000).toFixed(0)}K`}
-          change="+18.5%"
-          changeType="positive"
           icon={IndianRupeeIcon}
           color="purple"
         />
@@ -630,7 +728,7 @@ const Franchises = () => {
         onClose={() => setIsCreateModalOpen(false)}
         title="Create New Franchise"
       >
-        <FranchiseForm onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} />
+        <FranchiseForm isSaving={isSavingFranchise} onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} />
       </Modal>
 
       {/* Edit Modal */}
@@ -642,7 +740,7 @@ const Franchises = () => {
         }}
         title="Edit Franchise"
       >
-        <FranchiseForm franchise={selectedFranchise} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} />
+        <FranchiseForm franchise={selectedFranchise} isSaving={isSavingFranchise} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} />
       </Modal>
 
       {/* Detail Modal */}
@@ -660,12 +758,13 @@ const Franchises = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-500">Franchise Name</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.name}</p>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.name || 'N/A'}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Owner Name</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedFranchise.ownerName || 'N/A'}</p>
               </div>
+
               <div>
                 <label className="text-sm font-medium text-gray-500">Email</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedFranchise.email || 'N/A'}</p>
@@ -674,16 +773,106 @@ const Franchises = () => {
                 <label className="text-sm font-medium text-gray-500">Mobile</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedFranchise.mobile || 'N/A'}</p>
               </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-500">Street</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.address?.street || 'N/A'}</p>
+              </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">City</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedFranchise.address?.city || 'N/A'}</p>
               </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-500">State</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.address?.state || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Pincode</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.address?.pincode || 'N/A'}</p>
+              </div>
+
               <div>
                 <label className="text-sm font-medium text-gray-500">Status</label>
                 <div className="mt-1">
                   <StatusBadge status={selectedFranchise.status} />
                 </div>
               </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Regional Manager</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.regionalManager?.name || selectedFranchise.regionalManager || 'N/A'}</p>
+              </div>
+            </div>
+
+            {/* KYC */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">KYC</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">PAN</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedFranchise.kyc?.pan || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Aadhaar</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedFranchise.kyc?.aadhaar || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">GST</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedFranchise.kyc?.gst || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Details */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Bank Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Account Holder</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedFranchise.bankDetails?.accountHolderName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Account Number</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedFranchise.bankDetails?.accountNumber ? String(selectedFranchise.bankDetails.accountNumber) : 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Bank Name</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedFranchise.bankDetails?.bankName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">IFSC / Branch</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedFranchise.bankDetails?.ifsc ? `${selectedFranchise.bankDetails.ifsc} ${selectedFranchise.bankDetails.branch ? ` / ${selectedFranchise.bankDetails.branch}` : ''}` : (selectedFranchise.bankDetails?.branch || 'N/A')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Documents */}
+            <div className="pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Uploaded Documents</h4>
+              {loadingFranchiseDocs ? (
+                <p className="text-sm text-gray-500">Loading documents...</p>
+              ) : franchiseDocs.length === 0 ? (
+                <p className="text-sm text-gray-500">No documents uploaded.</p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {franchiseDocs.map((doc) => {
+                    const src = doc.url || doc.filePath || doc.fileName
+                    const isImage = doc.mimeType && doc.mimeType.startsWith && doc.mimeType.startsWith('image')
+                    return (
+                      <div key={doc._id || doc.id || doc.fileName} className="w-24">
+                        {isImage ? (
+                          <a href={src} target="_blank" rel="noreferrer">
+                            <img src={src} alt={doc.originalFileName || doc.fileName} className="w-24 h-24 object-cover rounded border" />
+                          </a>
+                        ) : (
+                          <a href={src} target="_blank" rel="noreferrer" className="text-sm text-primary-600 underline">{doc.originalFileName || doc.fileName}</a>
+                        )}
+                        <p className="text-xs text-gray-500 truncate">{doc.documentType}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Performance Metrics */}
@@ -724,6 +913,17 @@ const Franchises = () => {
                 Edit Franchise
               </button>
             </div>
+            <div className="pt-2 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setIsDetailModalOpen(false)
+                  handleCreateAgentForFranchise(selectedFranchise)
+                }}
+                className="w-full px-4 py-2 bg-primary-700 text-white rounded-lg hover:bg-primary-600 transition-colors"
+              >
+                Create Agent
+              </button>
+            </div>
           </div>
         )}
       </Modal>
@@ -739,6 +939,16 @@ const Franchises = () => {
         cancelText="Cancel"
         type="danger"
       />
+      <Modal isOpen={isCreateAgentModalOpen} onClose={() => { setIsCreateAgentModalOpen(false); setSelectedFranchise(null) }} title={`Create Agent${selectedFranchise ? ` for ${selectedFranchise.name}` : ''}`} size="md">
+        <AgentForm
+          onSave={handleCreateAgentSave}
+          onClose={() => { setIsCreateAgentModalOpen(false); setSelectedFranchise(null) }}
+          isSaving={isCreatingAgent}
+          fixedManagedBy={selectedFranchise ? (selectedFranchise._id || selectedFranchise.id) : null}
+          fixedManagedByModel="Franchise"
+          hideManagedBySelector={true}
+        />
+      </Modal>
     </div>
   )
 }

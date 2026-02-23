@@ -1,682 +1,734 @@
-import { useState, useEffect, useMemo } from 'react'
-import api from '../services/api'
-import { authService } from '../services/auth.service'
+import { useEffect, useState, useMemo } from 'react';
+import api from '../services/api';
+import { toast } from '../services/toastService';
+import { authService } from '../services/auth.service';
 
-const LeadForm = ({ lead, onSave, onClose }) => {
-  const currentUser = useMemo(() => authService.getUser(), [])
-  const userRole = currentUser?.role || 'super_admin'
-  const isAgent = userRole === 'agent'
+const NEW_LEAD_OPTION = 'new_lead';
 
-  const extractId = (value) => {
-    if (!value) return ''
-    if (typeof value === 'string') return value
-    if (typeof value === 'object') {
-      return value._id?.toString() || value.id?.toString() || ''
-    }
-    return ''
-  }
+// Simple mapping of loan types for legacy form
+const LOAN_TYPES = [
+  { value: 'personal_loan', label: 'Personal' },
+  { value: 'home_loan', label: 'Home' },
+  { value: 'business_loan', label: 'Business' },
+  { value: 'car_loan', label: 'Car' },
+  { value: 'education_loan', label: 'Education' },
+];
 
-  const agentId = useMemo(() => extractId(currentUser?._id || currentUser?.id), [currentUser])
-  const associatedId = useMemo(() => {
-    if (!currentUser) return ''
-    if (currentUser.role === 'franchise') return extractId(currentUser?.franchiseOwned || currentUser?.franchise)
-    if (currentUser.role === 'relationship_manager') return extractId(currentUser?.relationshipManagerOwned)
-    if (currentUser.role === 'agent') return extractId(currentUser?.managedBy || currentUser?.franchise)
-    return ''
-  }, [currentUser])
-  const associatedModelDefault = useMemo(() => {
-    if (!currentUser) return undefined
-    if (currentUser.role === 'franchise') return 'Franchise'
-    if (currentUser.role === 'relationship_manager') return 'RelationshipManager'
-    if (currentUser.role === 'agent') return currentUser?.managedByModel || (currentUser?.franchise ? 'Franchise' : undefined)
-    return undefined
-  }, [currentUser])
+export default function LeadForm({ lead = null, onSave, onClose }) {
+  const userRole = authService.getUser()?.role || '';
+  const isAgent = userRole === 'agent';
+  const isAdmin = userRole === 'super_admin';
+  const isAccountant = userRole === 'accounts_manager';
+  const isRelationshipManager = userRole === 'relationship_manager';
+  const canSetCommission = isAdmin || isAccountant || isRelationshipManager;
 
-  const [formData, setFormData] = useState({
-    applicantEmail: '',
-    applicantMobile: '',
-    loanType: '',
-    loanAmount: '',
-    status: 'logged',
-    agentId: agentId,
-    associatedId: associatedId,
-    associatedModel: associatedModelDefault,
-    bankId: '',
-    customerName: '',
-    // sanctionedAmount removed
-    sanctionedDate: '',
-    disbursedAmount: '',
-    disbursementDate: '',
-    disbursementType: '',
-    loanAccountNo: '',
-    smBmId: '',
-    smBmEmail: '',
-    smBmMobile: '',
-    asmName: '',
-    asmEmail: '',
-    asmMobile: '',
-    dsaCode: '',
-    branch: '',
-    remarks: '',
-  })
+  const [banks, setBanks] = useState([]);
+  const [selectedBank, setSelectedBank] = useState(() => {
+    if (lead?.leadType === 'new_lead') return NEW_LEAD_OPTION;
+    return lead?.bank?._id || lead?.bank || '';
+  });
+  const [leadFormDef, setLeadFormDef] = useState(null);
+  const [loadingFormDef, setLoadingFormDef] = useState(false);
 
-  const [errors, setErrors] = useState({})
-  const [banks, setBanks] = useState([])
-  const [staff, setStaff] = useState([])
-  const [bankManagers, setBankManagers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [smBmSearch, setSmBmSearch] = useState('')
-  const [showSmBmSuggestions, setShowSmBmSuggestions] = useState(false)
+  const [formValues, setFormValues] = useState(() => ({ ...lead?.formValues }));
+  const [standard, setStandard] = useState(() => {
+    const leadFormValues = lead?.formValues || {};
+    return {
+      bankId: lead?.bank?._id || lead?.bank || '',
+      customerName: lead?.customerName || lead?.leadName || leadFormValues.customerName || leadFormValues.leadName || '',
+      leadName: lead?.leadName || lead?.customerName || leadFormValues.leadName || leadFormValues.customerName || '',
+      applicantEmail: lead?.applicantEmail || lead?.email || leadFormValues.email || leadFormValues.applicantEmail || '',
+      applicantMobile: lead?.applicantMobile || lead?.phone || lead?.mobile || leadFormValues.mobile || leadFormValues.applicantMobile || '',
+      address: lead?.address || leadFormValues.address || '',
+      loanType: lead?.loanType || leadFormValues.loanType || '',
+      loanAmount: lead?.loanAmount || leadFormValues.loanAmount || '',
+      branch: lead?.branch || leadFormValues.branch || '',
+      loanAccountNo: lead?.loanAccountNo || leadFormValues.loanAccountNo || leadFormValues.loanAccountNumber || '',
+      dsaCode: lead?.dsaCode || lead?.codeUse || leadFormValues.dsaCode || leadFormValues.codeUse || '',
+      remarks: lead?.remarks || leadFormValues.remark || leadFormValues.remarks || '',
+      smBmEmail: lead?.smBmEmail || leadFormValues.smBmEmail || '',
+      smBmMobile: lead?.smBmMobile || leadFormValues.smBmMobile || '',
+      commissionPercentage: lead?.commissionPercentage || '',
+      commissionAmount: lead?.commissionAmount || '',
+    };
+  });
+
+  // When editing new_lead, RM can assign bank - track it separately for the "Assign Bank" section
+  const [assignBankId, setAssignBankId] = useState(lead?.bank?._id || lead?.bank || '');
+
+  const [documentTypes, setDocumentTypes] = useState(() => (lead?.documentTypes || []));
+  const [uploadedDocs, setUploadedDocs] = useState(() => (lead?.documents || []));
+  const [uploading, setUploading] = useState(false);
+
+  // temp id for pre-uploading docs before lead is created
+  const tempEntityId = useMemo(() => `temp-${Date.now()}-${Math.round(Math.random() * 1e6)}`, []);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const load = async () => {
       try {
-        setLoading(true)
-        const fetchPromises = [
-          api.banks.getAll(),
-          api.staff.getAll(),
-          // load a larger set initially (backend supports pagination)
-          api.bankManagers.getAll({ limit: 1000 }),
-        ]
-        
-        const [banksResponse, staffResponse, bankManagersResponse] = await Promise.all(fetchPromises)
-        
-        // Handle banks
-        const banksData = banksResponse?.data || (Array.isArray(banksResponse) ? banksResponse : [])
-        setBanks(Array.isArray(banksData) ? banksData : [])
-        
-        // Handle staff
-        const staffData = staffResponse?.data || (Array.isArray(staffResponse) ? staffResponse : [])
-        setStaff(Array.isArray(staffData) ? staffData : [])
-        
-        // Handle bank managers
-        const bankManagersData = bankManagersResponse?.data || (Array.isArray(bankManagersResponse) ? bankManagersResponse : [])
-        setBankManagers(Array.isArray(bankManagersData) ? bankManagersData : [])
-      } catch (error) {
-        console.error('Error fetching data:', error)
-        setBanks([])
-        setStaff([])
-        setBankManagers([])
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-  }, [])
-
-  // When a bank is selected, fetch bank managers for that bank only.
-  // If bank is cleared, restore the unfiltered list.
-  useEffect(() => {
-    const fetchByBank = async () => {
-      try {
-        // don't block the whole form for this small request, but indicate loading
-        setLoading(true)
-        if (!formData.bankId) {
-          // no bank selected -> load all bank managers
-          const resp = await api.bankManagers.getAll({ limit: 1000 })
-          const data = resp?.data || (Array.isArray(resp) ? resp : [])
-          setBankManagers(Array.isArray(data) ? data : [])
-          return
-        }
-
-        // fetch managers for the selected bank
-        const resp = await api.bankManagers.getAll({ bank: formData.bankId, limit: 1000 })
-        const data = resp?.data || (Array.isArray(resp) ? resp : [])
-        setBankManagers(Array.isArray(data) ? data : [])
+        const resp = await api.banks.getAll();
+        setBanks(resp?.data || []);
       } catch (err) {
-        console.error('Error fetching bank managers for bank:', err)
-        setBankManagers([])
-      } finally {
-        setLoading(false)
+        console.error('Failed to load banks', err);
       }
-    }
-
-    fetchByBank()
-  }, [formData.bankId])
+    };
+    load();
+  }, []);
 
   useEffect(() => {
-    if (lead) {
-      const smBmId = extractId(lead.smBmId || lead.smBm)
-      const allManagers = [...staff, ...bankManagers]
-      const selectedStaff = allManagers.find((s) => (s.id || s._id) === smBmId)
-      setFormData({
-        applicantEmail: lead.applicantEmail || lead.email || '',
-        applicantMobile: lead.applicantMobile || lead.phone || '',
-        loanType: lead.loanType || '',
-        loanAmount: lead.loanAmount || '',
-        status: lead.status || 'logged',
-        agentId: agentId,
-        associatedId: extractId(lead.associated || lead.franchise),
-        associatedModel: lead.associatedModel || (lead.franchise ? 'Franchise' : undefined),
-        bankId: extractId(lead.bankId || lead.bank),
-        customerName: lead.customerName || '',
-        sanctionedDate: lead.sanctionedDate ? new Date(lead.sanctionedDate).toISOString().split('T')[0] : '',
-        disbursedAmount: lead.disbursedAmount || '',
-        disbursementDate: lead.disbursementDate ? new Date(lead.disbursementDate).toISOString().split('T')[0] : '',
-        disbursementType: lead.disbursementType || '',
-        loanAccountNo: lead.loanAccountNo || '',
-        smBmId: smBmId,
-        smBmEmail: lead.smBmEmail || lead.smBm?.email || '',
-        smBmMobile: lead.smBmMobile || lead.smBm?.mobile || '',
-        asmName: lead.asmName || '',
-        asmEmail: lead.asmEmail || '',
-        asmMobile: lead.asmMobile || '',
-        dsaCode: lead.dsaCode || lead.codeUse || '',
-        branch: lead.branch || '',
-        remarks: lead.remarks || '',
-      })
-      setSmBmSearch(selectedStaff?.name || '')
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        agentId: agentId,
-        associatedId: associatedId,
-        associatedModel: associatedModelDefault,
-      }))
+    // when bank/leadType changes, load lead form
+    const loadLeadForm = async () => {
+      if (!selectedBank) {
+        setLeadFormDef(null);
+        return;
+      }
+      try {
+        setLoadingFormDef(true);
+        const resp = selectedBank === NEW_LEAD_OPTION
+          ? await api.leadForms.getNewLeadForm()
+          : await api.leadForms.getByBank(selectedBank);
+        const data = resp?.data || null;
+        // normalize field flags (ensure `required` is boolean even if backend returns strings)
+        const normalized = data
+          ? {
+            ...data,
+            fields: (data.fields || []).map((f) => ({
+              ...f,
+              required: !!(f.required === true || f.required === 'true' || f.required === 1 || f.required === '1'),
+            })),
+            agentFields: (data.agentFields || []).map((f) => ({
+              ...f,
+              required: !!(f.required === true || f.required === 'true' || f.required === 1 || f.required === '1'),
+            })),
+          }
+          : null;
+        setLeadFormDef(normalized);
+        setDocumentTypes(normalized?.documentTypes || []);
+        // if lead has formValues, keep; else reset
+        if (!lead) {
+          setFormValues({});
+        }
+      } catch (err) {
+        console.error('Failed to load lead form for bank', err);
+        setLeadFormDef(null);
+        setDocumentTypes([]);
+      } finally {
+        setLoadingFormDef(false);
+      }
+    };
+    loadLeadForm();
+  }, [selectedBank]);
+
+  const handleFieldChange = (key, value) => {
+    setFormValues((p) => ({ ...(p || {}), [key]: value }));
+    // Synchronize with standard state if key matches a standard field
+    if (Object.keys(standard).includes(key)) {
+      setStandard((p) => ({ ...p, [key]: value }));
     }
-  }, [lead, agentId, associatedId, associatedModelDefault, staff, bankManagers])
+  };
 
-  const validate = () => {
-    const newErrors = {}
-    if (formData.applicantEmail && !/\S+@\S+\.\S+/.test(formData.applicantEmail)) newErrors.applicantEmail = 'Email is invalid'
-    if (!formData.loanType) newErrors.loanType = 'Loan type is required'
-    if (!formData.loanAmount || formData.loanAmount <= 0) newErrors.loanAmount = 'Loan amount must be greater than 0'
-    if (!formData.bankId) newErrors.bankId = 'Bank is required'
-    if (!formData.customerName || !formData.customerName.trim()) newErrors.customerName = 'Customer name is required'
-    if (!formData.loanAccountNo || !formData.loanAccountNo.trim()) newErrors.loanAccountNo = 'Loan account number is required'
+  const handleStandardChange = (k, v) => {
+    setStandard((p) => ({ ...p, [k]: v }));
+    if (k === 'bankId') setSelectedBank(v);
+  };
 
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+  const handleFileSelect = async (file, docTypeKey, description = '') => {
+    if (!file || !docTypeKey) return;
+    try {
+      setUploading(true);
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('entityType', 'lead');
+      // upload against temporary id so we can provide URL in create payload
+      fd.append('entityId', tempEntityId);
+      fd.append('documentType', docTypeKey);
+      fd.append('description', description || '');
+      const resp = await api.documents.upload(fd);
+      const doc = resp?.data;
+      if (doc) {
+        setUploadedDocs((p) => [...(p || []), { documentType: docTypeKey, url: doc.url || doc.filePath || '', meta: doc }]);
+        toast.success('Uploaded', 'Document uploaded');
+      } else {
+        toast.error('Upload failed', 'No response data');
+      }
+    } catch (err) {
+      console.error('Upload error', err);
+      toast.error('Upload failed', err.message || '');
+    } finally {
+      setUploading(false);
+    }
+  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (validate()) {
-      let finalFormData = { ...formData }
-      
-      // Check if SM/BM details are provided but no matching staff was selected
-      const smBmName = smBmSearch?.trim()
-      const hasSmBmName = smBmName && smBmName.length > 0
-      const hasSmBmEmail = formData.smBmEmail?.trim()
-      const hasSmBmMobile = formData.smBmMobile?.trim()
-      
-      // Create SM/BM as a BankManager (contact-only) if name is provided and (email or mobile is provided) but no staff/bm ID is selected
-      if (hasSmBmName && (hasSmBmEmail || hasSmBmMobile) && !formData.smBmId) {
-        try {
-          const newBMData = {
-            name: smBmName,
-            email: hasSmBmEmail || `${smBmName.toLowerCase().replace(/\s+/g, '.')}@ykc.com`,
-            mobile: hasSmBmMobile || '',
-            role: 'bm',
-            bank: formData.bankId || undefined,
-            status: 'active',
-          }
+  const handleRemoveUploaded = (index) => {
+    setUploadedDocs((p) => p.filter((_, i) => i !== index));
+  };
 
-          const response = await api.bankManagers.create(newBMData)
-          const newBMId = response?.data?._id || response?.data?.id || response?._id || response?.id
+  const validateAndSubmit = async () => {
+    const isNewLead = selectedBank === NEW_LEAD_OPTION || leadFormDef?.leadType === 'new_lead';
 
-          if (newBMId) {
-            finalFormData.smBmId = newBMId
-            // Refresh bank managers list to include the newly created BM
-            try {
-              const bmResponse = await api.bankManagers.getAll({ limit: 1000 })
-              const bmData = bmResponse?.data || (Array.isArray(bmResponse) ? bmResponse : [])
-              setBankManagers(Array.isArray(bmData) ? bmData : [])
-            } catch (refreshError) {
-              console.error('Error refreshing bank managers list:', refreshError)
-            }
-          }
-        } catch (error) {
-          console.error('Error creating SM/BM (BankManager):', error)
-          // Continue with submission even if BM creation fails
+    // Bank required only for bank-type leads
+    if (!isNewLead && !standard.bankId) return toast.error('Bank is required');
+
+    // For agents: If a bank/newLead is selected but no form exists, and it's not currently loading, that's an error state
+    // For non-agents: They don't need leadFormDef, they use standard fields
+    if (isAgent && !leadFormDef && !loadingFormDef && selectedBank) {
+      return toast.error(isNewLead ? 'No New Lead form configured. Ask Admin to set up in Lead Forms.' : 'No Lead Form configured for this bank');
+    }
+
+    // Validate commission fields only for bank-type leads (Admin/Accountant/Relationship Manager)
+    if (canSetCommission && !isNewLead) {
+      // When creating, both fields are required
+      if (!lead) {
+        if (!standard.commissionPercentage || standard.commissionPercentage === '') {
+          return toast.error('Commission Percentage is required');
+        }
+        if (!standard.commissionAmount || standard.commissionAmount === '') {
+          return toast.error('Commission Amount is required');
         }
       }
-      
-      // Map to API expected fields: associated + associatedModel
-      const payload = {
-        ...finalFormData,
-        associated: finalFormData.associatedId || undefined,
-        associatedModel: finalFormData.associatedModel || associatedModelDefault,
-        // Pass SM/BM name so backend can create staff when needed
-        smBmName: !finalFormData.smBmId ? (smBmSearch?.trim() || undefined) : undefined,
+      // Validate numeric values if provided
+      if (standard.commissionPercentage && standard.commissionPercentage !== '') {
+        if (isNaN(parseFloat(standard.commissionPercentage)) || parseFloat(standard.commissionPercentage) < 0 || parseFloat(standard.commissionPercentage) > 100) {
+          return toast.error('Commission Percentage must be between 0 and 100');
+        }
       }
-      // remove client-only fields
-      delete payload.associatedId
-      onSave(payload)
+      if (standard.commissionAmount && standard.commissionAmount !== '') {
+        if (isNaN(parseFloat(standard.commissionAmount)) || parseFloat(standard.commissionAmount) < 0) {
+          return toast.error('Commission Amount must be a positive number');
+        }
+      }
     }
-  }
 
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    const numericFields = ['loanAmount', 'disbursedAmount']
-    setFormData((prev) => ({
-      ...prev,
-      [name]: numericFields.includes(name) ? (value === '' ? '' : parseFloat(value) || '') : value,
-    }))
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }))
+    // For agents: If leadFormDef exists, validate required fields
+    // For non-agents: Validate standard required fields
+    if (isAgent && leadFormDef) {
+      const fieldsToValidate = leadFormDef.agentFields && leadFormDef.agentFields.length > 0 
+        ? leadFormDef.agentFields 
+        : (leadFormDef.fields || []);
+      const missing = [];
+      fieldsToValidate.forEach((f) => {
+        if (f.required) {
+          const val = formValues?.[f.key] ?? standard[f.key];
+          if (val === undefined || val === null || val === '') missing.push(f.label || f.key);
+        }
+      });
+      const missingDocs = [];
+      (leadFormDef.documentTypes || []).forEach((dt) => {
+        if (dt.required) {
+          const found = (uploadedDocs || []).find((d) => d.documentType === dt.key && d.url);
+          if (!found) missingDocs.push(dt.name || dt.key);
+        }
+      });
+      if (missing.length > 0) {
+        return toast.error(`Required fields missing: ${missing.join(', ')}`);
+      }
+      if (missingDocs.length > 0) {
+        return toast.error(`Required documents missing: ${missingDocs.join(', ')}`);
+      }
+    } else if (!isAgent && !isNewLead) {
+      // For non-agents creating/editing bank leads: validate standard required fields
+      if (!standard.customerName || standard.customerName.trim() === '') {
+        return toast.error('Customer Name is required');
+      }
+      // When editing, check if original lead has mobile; if not, validate it's provided
+      const originalMobile = lead?.applicantMobile || lead?.phone || lead?.mobile || lead?.formValues?.mobile || lead?.formValues?.applicantMobile;
+      if ((!standard.applicantMobile || standard.applicantMobile.trim() === '') && (!lead || !originalMobile)) {
+        return toast.error('Mobile is required');
+      }
+      if (!standard.dsaCode || standard.dsaCode.trim() === '') {
+        return toast.error('DSA Code is required');
+      }
+      if (!standard.remarks || standard.remarks.trim() === '') {
+        return toast.error('Remark is required');
+      }
+      if (!standard.loanType || standard.loanType.trim() === '') {
+        return toast.error('Loan Type is required');
+      }
+      if (!standard.loanAmount || standard.loanAmount <= 0) {
+        return toast.error('Loan Amount must be greater than 0');
+      }
     }
-    
-  }
 
-  const filteredStaff = [...staff, ...bankManagers].filter((staffMember) =>
-    (staffMember.name || '').toLowerCase().includes(smBmSearch.toLowerCase())
-  )
+    const payload = {
+      leadType: isNewLead ? 'new_lead' : 'bank',
+      bankId: isNewLead ? undefined : standard.bankId,
+      bank: isNewLead ? undefined : standard.bankId,
+      leadForm: (isAgent && leadFormDef) ? leadFormDef._id : undefined,
+      formValues: (isAgent && leadFormDef) ? formValues : undefined,
+      documents: (uploadedDocs || []).map((d) => ({ documentType: d.documentType, url: d.url })),
+    };
 
-  const handleSmBmSearchChange = (e) => {
-    const value = e.target.value
-    setSmBmSearch(value)
-    setShowSmBmSuggestions(true)
-    if (!value) {
-      setFormData((prev) => ({
-        ...prev,
-        smBmId: '',
-        smBmEmail: '',
-        smBmMobile: '',
-      }))
+    // Standard fields for non-agents
+    if (!isAgent) {
+      payload.customerName = standard.customerName?.trim() || standard.leadName?.trim() || undefined;
+      payload.leadName = standard.leadName?.trim() || standard.customerName?.trim() || undefined;
+      payload.applicantEmail = standard.applicantEmail?.trim() || undefined;
+      // When editing, preserve original mobile if form field is empty
+      const originalMobile = lead?.applicantMobile || lead?.phone || lead?.mobile || lead?.formValues?.mobile || lead?.formValues?.applicantMobile;
+      payload.applicantMobile = standard.applicantMobile?.trim() || (lead && originalMobile ? originalMobile : undefined);
+      payload.address = standard.address?.trim() || undefined;
+      payload.branch = standard.branch?.trim() || undefined;
+      payload.loanAccountNo = standard.loanAccountNo?.trim() || undefined;
+      payload.dsaCode = standard.dsaCode?.trim() || undefined;
+      payload.remarks = standard.remarks?.trim() || undefined;
+      payload.smBmEmail = standard.smBmEmail?.trim() || undefined;
+      payload.smBmMobile = standard.smBmMobile?.trim() || undefined;
     }
-  }
 
-  const handleSmBmSelect = (staffMember) => {
-    setSmBmSearch(staffMember.name || '')
-    setShowSmBmSuggestions(false)
-    setFormData((prev) => ({
-      ...prev,
-      smBmId: staffMember.id || staffMember._id,
-      smBmEmail: staffMember.email || '',
-      smBmMobile: staffMember.mobile || '',
-    }))
-  }
+    // Bank-specific fields only for bank-type leads
+    if (!isNewLead) {
+      payload.loanType = standard.loanType || formValues?.loanType || undefined;
+      payload.loanAmount = (standard.loanAmount || formValues?.loanAmount) ? Number(standard.loanAmount || formValues?.loanAmount) : undefined;
+      if (canSetCommission) {
+        payload.commissionPercentage = standard.commissionPercentage ? parseFloat(standard.commissionPercentage) : undefined;
+        payload.commissionAmount = standard.commissionAmount ? parseFloat(standard.commissionAmount) : undefined;
+      }
+    } else if (lead && isNewLead && assignBankId) {
+      // RM editing new_lead: allow adding bank and bank-specific fields
+      payload.bankId = assignBankId;
+      payload.bank = assignBankId;
+      payload.loanType = standard.loanType || formValues?.loanType || undefined;
+      payload.loanAmount = (standard.loanAmount || formValues?.loanAmount) ? Number(standard.loanAmount || formValues?.loanAmount) : undefined;
+      payload.loanAccountNo = standard.loanAccountNo || formValues?.loanAccountNo || undefined;
+      payload.branch = standard.branch || formValues?.branch || undefined;
+      if (canSetCommission) {
+        payload.commissionPercentage = standard.commissionPercentage ? parseFloat(standard.commissionPercentage) : undefined;
+        payload.commissionAmount = standard.commissionAmount ? parseFloat(standard.commissionAmount) : undefined;
+      }
+    }
+
+    // Pass to parent
+    if (onSave) onSave(payload);
+  };
+
+  const isNewLead = selectedBank === NEW_LEAD_OPTION || leadFormDef?.leadType === 'new_lead';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Customer Name <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          name="customerName"
-          value={formData.customerName}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.customerName ? 'border-red-500' : 'border-gray-300'
-          }`}
-          placeholder="Enter customer name"
-        />
-        {errors.customerName && <p className="mt-1 text-sm text-red-600">{errors.customerName}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Mobile Number
-        </label>
-        <input
-          type="tel"
-          name="applicantMobile"
-          value={formData.applicantMobile}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.applicantMobile ? 'border-red-500' : 'border-gray-300'
-          }`}
-          placeholder="Enter mobile number (optional)"
-        />
-        {errors.applicantMobile && <p className="mt-1 text-sm text-red-600">{errors.applicantMobile}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Email
-        </label>
-        <input
-          type="email"
-          name="applicantEmail"
-          value={formData.applicantEmail}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.applicantEmail ? 'border-red-500' : 'border-gray-300'
-          }`}
-          placeholder="Enter email address (optional)"
-        />
-        {errors.applicantEmail && <p className="mt-1 text-sm text-red-600">{errors.applicantEmail}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Loan Type <span className="text-red-500">*</span>
+    <div className="space-y-6">
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-sm">
+        <label className="block text-sm font-bold text-gray-700 mb-2">
+          {isNewLead ? 'Lead Type' : 'Select Bank'} {!isNewLead && '*'}
         </label>
         <select
-          name="loanType"
-          value={formData.loanType}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.loanType ? 'border-red-500' : 'border-gray-300'
-          }`}
+          value={selectedBank}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSelectedBank(v);
+            setStandard((p) => ({ ...p, bankId: v === NEW_LEAD_OPTION ? '' : v }));
+          }}
+          className="w-full px-4 py-3 border-2 border-primary-100 rounded-lg focus:border-primary-500 transition-colors bg-white text-lg font-medium"
         >
-          <option value="">Select loan type</option>
-          <option value="personal_loan">Personal Loan</option>
-          <option value="home_loan">Home Loan</option>
-          <option value="business_loan">Business Loan</option>
-          <option value="loan_against_property">Loan Against Property</option>
-          <option value="education_loan">Education Loan</option>
-          <option value="car_loan">Car Loan</option>
-          <option value="gold_loan">Gold Loan</option>
-        </select>
-        {errors.loanType && <p className="mt-1 text-sm text-red-600">{errors.loanType}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Loan Account No <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          name="loanAccountNo"
-          value={formData.loanAccountNo}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.loanAccountNo ? 'border-red-500' : 'border-gray-300'
-          }`}
-          placeholder="Enter loan account number"
-        />
-        {errors.loanAccountNo && <p className="mt-1 text-sm text-red-600">{errors.loanAccountNo}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Loan Amount (₹) <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="number"
-          name="loanAmount"
-          value={formData.loanAmount}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.loanAmount ? 'border-red-500' : 'border-gray-300'
-          }`}
-          placeholder="Enter loan amount"
-          min="0"
-        />
-        {errors.loanAmount && <p className="mt-1 text-sm text-red-600">{errors.loanAmount}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Status <span className="text-red-500">*</span>
-        </label>
-        <select
-          name="status"
-          value={formData.status}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-        >
-          <option value="logged">Login</option>
-          <option value="sanctioned">Sanction</option>
-          <option value="partial_disbursed">Partially Disburse</option>
-          <option value="disbursed">Disburse</option>
-          <option value="rejected">Reject</option>
+          <option value="">-- Choose Lead Type or Bank --</option>
+          <option value={NEW_LEAD_OPTION}>New Lead</option>
+          {banks.map((b) => (
+            <option key={b._id || b.id} value={b._id || b.id}>{b.name}</option>
+          ))}
         </select>
       </div>
 
+      {!selectedBank && !lead && (
+        <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-xl bg-white">
+          <p className="text-gray-500 font-medium">Please select New Lead or a bank to load the form.</p>
+        </div>
+      )}
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Bank <span className="text-red-500">*</span>
-        </label>
-        <select
-          name="bankId"
-          value={formData.bankId}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.bankId ? 'border-red-500' : 'border-gray-300'
-          }`}
-        >
-          <option value="">Select a bank</option>
-          {loading ? (
-            <option disabled>Loading banks...</option>
-          ) : (
-            banks.map((bank) => (
-              <option key={bank.id || bank._id} value={bank.id || bank._id}>
-                {bank.name || 'N/A'}
-              </option>
-            ))
-          )}
-        </select>
-        {errors.bankId && <p className="mt-1 text-sm text-red-600">{errors.bankId}</p>}
-      </div>
+      {selectedBank && (
+        <>
+          {loadingFormDef && isAgent ? (
+            <div className="py-12 text-center text-gray-600 font-medium whitespace-nowrap overflow-hidden">
+              <div className="animate-pulse inline-block">Loading form configuration...</div>
+            </div>
+          ) : (isAgent && leadFormDef) ? (
+            <div className="space-y-8 p-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {((leadFormDef.agentFields && leadFormDef.agentFields.length > 0) 
+                  ? leadFormDef.agentFields 
+                  : (leadFormDef.fields || []))
+                  .filter((f) => {
+                    const key = (f.key || '').toLowerCase();
+                    const label = (f.label || '').toLowerCase();
 
-  <div className="pt-4 border-t border-gray-200">
-    <h3 className="text-lg font-semibold text-gray-900 mb-4">Sanction & Disbursement Details</h3>
-  </div>
+                    // For New Lead: show all fields admin selected (including leadName, customerName)
+                    if (isNewLead) return true;
 
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      Sanctioned Date
-    </label>
-    <input
-      type="date"
-      name="sanctionedDate"
-      value={formData.sanctionedDate}
-      onChange={handleChange}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-    />
-  </div>
+                    // For bank forms: exclude system-handled fields
+                    const excludedKeys = [
+                      'applicantEmail', 'applicantMobile', 'customerName', 'leadName',
+                      'asmName', 'asmEmail', 'asmMobile',
+                      'smBmName', 'smBmEmail', 'smBmMobile',
+                      'salary', 'Salary'
+                    ];
+                    if (excludedKeys.some(excluded => key === excluded.toLowerCase() || label.includes(excluded.toLowerCase()))) {
+                      return false;
+                    }
+                    return true;
+                  })
+                  .filter((f, index, array) => {
+                    // Remove duplicate DSA Code fields - keep only the first one
+                    const key = (f.key || '').toLowerCase();
+                    const label = (f.label || '').toLowerCase();
+                    const isDsaCode = key === 'dsacode' || key === 'dsa_code' || key === 'codeuse' || label.includes('dsa code');
+                    
+                    if (isDsaCode) {
+                      // Keep only the first DSA Code field found (by original array order)
+                      const firstDsaIndex = array.findIndex((item) => {
+                        const itemKey = (item.key || '').toLowerCase();
+                        const itemLabel = (item.label || '').toLowerCase();
+                        return itemKey === 'dsacode' || itemKey === 'dsa_code' || itemKey === 'codeuse' || itemLabel.includes('dsa code');
+                      });
+                      return index === firstDsaIndex;
+                    }
+                    
+                    return true;
+                  })
+                  .sort((a, b) => (a.order || 0) - (b.order || 0))
+                  .map((f) => {
+                  const val = formValues?.[f.key] ?? standard[f.key] ?? '';
+                  const inputClass = "w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none";
+                  return (
+                    <div key={f.key}>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">{f.label}{f.required && ' *'}</label>
+                      {f.type === 'select' ? (
+                        <select value={val} onChange={(e) => handleFieldChange(f.key, e.target.value)} className={inputClass}>
+                          <option value="">-- select --</option>
+                          {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      ) : f.type === 'textarea' ? (
+                        <textarea value={val} onChange={(e) => handleFieldChange(f.key, e.target.value)} className={inputClass} />
+                      ) : (
+                        <input type={f.type || 'text'} value={val} onChange={(e) => handleFieldChange(f.key, e.target.value)} className={inputClass} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {(leadFormDef.documentTypes || []).length > 0 && (
+                <div className="border-t pt-6 space-y-4">
+                  <h5 className="font-bold text-gray-800">Required Documents</h5>
+                  {(leadFormDef.documentTypes || []).map(dt => (
+                    <div key={dt.key} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+                      <span className="text-sm font-medium">{dt.name}{dt.required && ' *'}</span>
+                      <div className="flex items-center gap-2">
+                        <input type="file" className="hidden" id={`file-${dt.key}`} onChange={(e) => handleFileSelect(e.target.files?.[0], dt.key, dt.name)} />
+                        <label htmlFor={`file-${dt.key}`} className="px-3 py-1 bg-white border rounded text-xs cursor-pointer hover:bg-gray-100">Upload</label>
+                        {uploadedDocs.filter(d => d.documentType === dt.key).map((d, i) => (
+                          <div key={i} className="text-xs text-green-600 font-bold">Uploaded</div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : !isAgent ? (
+            // Non-agents see standard fields
+            <div className="space-y-8 p-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Customer Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    Customer Name {!isNewLead && '*'}
+                  </label>
+                  <input
+                    type="text"
+                    value={standard.customerName || ''}
+                    onChange={(e) => handleStandardChange('customerName', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    required={!isNewLead}
+                  />
+                </div>
 
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      Disbursed Amount (₹)
-    </label>
-    <input
-      type="number"
-      name="disbursedAmount"
-      value={formData.disbursedAmount}
-      onChange={handleChange}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-      placeholder="Enter disbursed amount"
-      min="0"
-      step="1000"
-    />
-  </div>
+                {/* Applicant Email */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
+                  <input
+                    type="email"
+                    value={standard.applicantEmail || ''}
+                    onChange={(e) => handleStandardChange('applicantEmail', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                  />
+                </div>
 
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      Disbursement Date
-    </label>
-    <input
-      type="date"
-      name="disbursementDate"
-      value={formData.disbursementDate}
-      onChange={handleChange}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-    />
-  </div>
+                {/* Applicant Mobile */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    Mobile {!isNewLead && '*'}
+                  </label>
+                  <input
+                    type="tel"
+                    value={standard.applicantMobile || ''}
+                    onChange={(e) => handleStandardChange('applicantMobile', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    required={!isNewLead}
+                  />
+                </div>
 
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      Disbursement Type
-    </label>
-    <select
-      name="disbursementType"
-      value={formData.disbursementType}
-      onChange={handleChange}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-    >
-      <option value="">Select disbursement type</option>
-      <option value="full">Full</option>
-      <option value="partial">Partial</option>
-    </select>
-  </div>
+                {/* Loan Type - only for bank leads */}
+                {!isNewLead && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loan Type *</label>
+                    <select
+                      value={standard.loanType || ''}
+                      onChange={(e) => handleStandardChange('loanType', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                      required
+                    >
+                      <option value="">-- select --</option>
+                      {LOAN_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                )}
 
-      <div className="pt-4 border-t border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Manager Details</h3>
-      </div>
+                {/* Loan Amount - only for bank leads */}
+                {!isNewLead && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loan Amount *</label>
+                    <input
+                      type="number"
+                      value={standard.loanAmount || ''}
+                      onChange={(e) => handleStandardChange('loanAmount', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                      placeholder="0"
+                      required
+                      min="0"
+                    />
+                  </div>
+                )}
 
-      <div className="relative">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          SM/BM Name
-        </label>
-        <input
-          type="text"
-          value={smBmSearch}
-          onChange={handleSmBmSearchChange}
-          onFocus={() => setShowSmBmSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSmBmSuggestions(false), 200)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Search SM/BM name..."
-        />
-        {showSmBmSuggestions && smBmSearch && filteredStaff.length > 0 && (
-          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
-            {filteredStaff.map((staffMember) => (
-              <div
-                key={staffMember.id || staffMember._id}
-                onMouseDown={(e) => { e.preventDefault(); handleSmBmSelect(staffMember) }}
-                className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
-              >
-                <div className="font-medium text-gray-900">{staffMember.name || 'N/A'}</div>
-                {staffMember.email && (
-                  <div className="text-sm text-gray-500">{staffMember.email}</div>
+                {/* Branch - only for bank leads */}
+                {!isNewLead && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Branch</label>
+                    <input
+                      type="text"
+                      value={standard.branch || ''}
+                      onChange={(e) => handleStandardChange('branch', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    />
+                  </div>
+                )}
+
+                {/* Loan Account No - only for bank leads */}
+                {!isNewLead && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loan Account No</label>
+                    <input
+                      type="text"
+                      value={standard.loanAccountNo || ''}
+                      onChange={(e) => handleStandardChange('loanAccountNo', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    />
+                  </div>
+                )}
+
+                {/* Lead Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lead Name</label>
+                  <input
+                    type="text"
+                    value={standard.leadName || ''}
+                    onChange={(e) => handleStandardChange('leadName', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                  />
+                </div>
+
+                {/* DSA Code - required for bank leads */}
+                {!isNewLead && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">DSA Code *</label>
+                    <input
+                      type="text"
+                      value={standard.dsaCode || ''}
+                      onChange={(e) => handleStandardChange('dsaCode', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                      required
+                    />
+                  </div>
+                )}
+
+                {/* SM/BM Email - only for bank leads */}
+                {!isNewLead && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">SM/BM Email</label>
+                    <input
+                      type="email"
+                      value={standard.smBmEmail || ''}
+                      onChange={(e) => handleStandardChange('smBmEmail', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    />
+                  </div>
+                )}
+
+                {/* SM/BM Mobile - only for bank leads */}
+                {!isNewLead && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">SM/BM Mobile</label>
+                    <input
+                      type="tel"
+                      value={standard.smBmMobile || ''}
+                      onChange={(e) => handleStandardChange('smBmMobile', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    />
+                  </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-        {showSmBmSuggestions && smBmSearch && filteredStaff.length === 0 && (
-          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-            <div className="px-3 py-2 text-gray-500">No staff found</div>
-          </div>
-        )}
-      </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          SM/BM Email
-        </label>
-        <input
-          type="email"
-          name="smBmEmail"
-          value={formData.smBmEmail}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Enter SM/BM email"
-        />
-      </div>
+              {/* Address - textarea, full width */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Address</label>
+                <textarea
+                  value={standard.address || ''}
+                  onChange={(e) => handleStandardChange('address', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                  rows={3}
+                />
+              </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          SM/BM Mobile
-        </label>
-        <input
-          type="tel"
-          name="smBmMobile"
-          value={formData.smBmMobile}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Enter SM/BM mobile number"
-        />
-      </div>
+              {/* Remark - required for bank leads */}
+              {!isNewLead && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Remark *</label>
+                  <textarea
+                    value={standard.remarks || ''}
+                    onChange={(e) => handleStandardChange('remarks', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    rows={3}
+                    required
+                  />
+                </div>
+              )}
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          ASM Name
-        </label>
-        <input
-          type="text"
-          name="asmName"
-          value={formData.asmName}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Enter ASM name"
-        />
-      </div>
+              {/* Assign Bank - RM can add bank when editing new_lead */}
+              {lead && isNewLead && canSetCommission && (
+                <div className="border-t pt-6 space-y-4">
+                  <h5 className="font-bold text-gray-800">Assign Bank & Bank Details (Optional)</h5>
+                  <p className="text-sm text-gray-600">Relationship Manager can assign this lead to a bank and fill bank-specific details.</p>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Bank</label>
+                    <select
+                      value={assignBankId}
+                      onChange={(e) => setAssignBankId(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    >
+                      <option value="">-- Not assigned --</option>
+                      {banks.map((b) => (
+                        <option key={b._id || b.id} value={b._id || b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {assignBankId && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Commission Percentage (%)</label>
+                        <input
+                          type="number"
+                          value={standard.commissionPercentage || ''}
+                          onChange={(e) => handleStandardChange('commissionPercentage', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Commission Amount (₹)</label>
+                        <input
+                          type="number"
+                          value={standard.commissionAmount || ''}
+                          onChange={(e) => handleStandardChange('commissionAmount', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loan Type</label>
+                        <select
+                          value={standard.loanType || ''}
+                          onChange={(e) => handleStandardChange('loanType', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        >
+                          <option value="">-- select --</option>
+                          {LOAN_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Loan Amount</label>
+                        <input
+                          type="number"
+                          value={standard.loanAmount || ''}
+                          onChange={(e) => handleStandardChange('loanAmount', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          ASM Email
-        </label>
-        <input
-          type="email"
-          name="asmEmail"
-          value={formData.asmEmail}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Enter ASM email"
-        />
-      </div>
+              {/* Commission Fields - Only for bank-type leads and non-agents */}
+              {canSetCommission && !isNewLead && !isAgent && (
+                <div className="border-t pt-6 space-y-4">
+                  <h5 className="font-bold text-gray-800">Commission Details</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Commission Percentage (%) {!lead && '*'}
+                      </label>
+                      <input
+                        type="number"
+                        value={standard.commissionPercentage || ''}
+                        onChange={(e) => handleStandardChange('commissionPercentage', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        required={!lead}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Commission Amount (₹) {!lead && '*'}
+                      </label>
+                      <input
+                        type="number"
+                        value={standard.commissionAmount || ''}
+                        onChange={(e) => handleStandardChange('commissionAmount', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        required={!lead}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : isAgent ? (
+            <div className="py-12 bg-red-50 text-red-700 text-center rounded-xl border border-red-200">
+              No Lead Form configured for this bank.
+            </div>
+          ) : null}
+        </>
+      )}
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          ASM Mobile
-        </label>
-        <input
-          type="tel"
-          name="asmMobile"
-          value={formData.asmMobile}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Enter ASM mobile number"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          DSA Code
-        </label>
-        <input
-          type="text"
-          name="dsaCode"
-          value={formData.dsaCode}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Enter DSA code"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Branch/Loan Center
-        </label>
-        <input
-          type="text"
-          name="branch"
-          value={formData.branch}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="branch, city"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Remarks
-        </label>
-        <textarea
-          name="remarks"
-          value={formData.remarks}
-          onChange={handleChange}
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-          placeholder="Enter remarks"
-        />
-      </div>
-
-      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+      <div className="flex justify-end gap-3 pt-6 border-t font-semibold">
+        <button type="button" className="px-5 py-2 border rounded-lg" onClick={onClose}>Cancel</button>
         <button
           type="button"
-          onClick={onClose}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          className="px-8 py-2 bg-primary-900 text-white rounded-lg disabled:opacity-50"
+          disabled={uploading || (isAgent && selectedBank && !leadFormDef && !loadingFormDef)}
+          onClick={validateAndSubmit}
         >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-primary-900 rounded-lg hover:bg-primary-800 transition-colors"
-        >
-          {lead ? 'Update Lead' : 'Create Lead'}
+          {uploading ? 'Processing...' : (lead ? 'Update' : 'Create')}
         </button>
       </div>
-    </form>
-  )
+    </div>
+  );
 }
 
-export default LeadForm

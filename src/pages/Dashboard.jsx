@@ -13,6 +13,7 @@ import StatCard from '../components/StatCard'
 import api from '../services/api'
 import { authService } from '../services/auth.service'
 import { toast } from '../services/toastService'
+import AccountantOverview from './AccountantOverview'
 
 const Dashboard = () => {
   const navigate = useNavigate()
@@ -21,6 +22,7 @@ const Dashboard = () => {
     totalAgents: 0,
     totalInvoices: 0,
     totalRevenue: 0,
+    totalLoanAmount: 0,
   })
   const [relatedLists, setRelatedLists] = useState({
     recentLeads: [],
@@ -97,6 +99,7 @@ const Dashboard = () => {
           totalAgents: data.totalAgents || data.agents?.total || 0,
           totalInvoices: data.totalInvoices || data.invoices?.total || 0,
           totalRevenue: data.totalRevenue || data.revenue || data.totalCommission || 0,
+          totalLoanAmount: data.totalLoanAmount || 0,
         })
       }
 
@@ -191,11 +194,14 @@ const Dashboard = () => {
     }
   }
 
-  const { totalLeads, totalAgents, totalInvoices, totalRevenue } = stats
+  const { totalLeads, totalAgents, totalInvoices, totalRevenue, totalLoanAmount } = stats
   const isAgent = userRole === 'agent'
+  const isAccountant = userRole === 'accounts_manager'
 
-
-
+  // Render Accountant-specific dashboard
+  if (isAccountant) {
+    return <AccountantOverview />
+  }
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
@@ -216,32 +222,24 @@ const Dashboard = () => {
             <StatCard
               title="Total Leads"
               value={stats.totalLeads || 0}
-              change={`${stats.leads?.fresh || 0} fresh, ${stats.leads?.disbursed || 0} disbursed`}
-              changeType="positive"
               icon={Users}
               color="blue"
             />
             <StatCard
               title="Pending"
               value={stats.leads?.pending || 0}
-              change={`${stats.leads?.completed || 0} completed`}
-              changeType="neutral"
               icon={FileCheck}
               color="orange"
             />
             <StatCard
               title="Pending Invoices"
               value={stats.invoices?.pending || 0}
-              change={`${stats.invoices?.approved || 0} approved`}
-              changeType="neutral"
               icon={FileText}
               color="purple"
             />
             <StatCard
               title="Total Commission"
               value={`₹${((stats.totalRevenue || 0) / 1000).toFixed(1)}K`}
-              change={`${stats.payouts?.paid || 0} paid`}
-              changeType="positive"
               icon={IndianRupeeIcon}
               color="green"
             />
@@ -372,32 +370,24 @@ const Dashboard = () => {
             <StatCard
               title="Total Leads"
               value={totalLeads}
-              change="+12.5%"
-              changeType="positive"
               icon={Users}
               color="blue"
             />
             <StatCard
               title="Active Agents"
               value={totalAgents}
-              change="+5.2%"
-              changeType="positive"
               icon={Users}
               color="green"
             />
             <StatCard
               title="Total Invoices"
               value={totalInvoices}
-              change="+8.1%"
-              changeType="positive"
               icon={FileText}
               color="orange"
             />
             <StatCard
               title="Total Revenue"
               value={`₹${(totalRevenue / 1000).toFixed(1)}K`}
-              change="+15.3%"
-              changeType="positive"
               icon={IndianRupeeIcon}
               color="purple"
             />
