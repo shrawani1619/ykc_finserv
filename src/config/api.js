@@ -1,5 +1,7 @@
-// API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+// API Configuration - ensure base URL always ends with /api for correct endpoint paths
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const normalized = rawBaseUrl.replace(/\/+$/, ''); // Remove trailing slashes
+const API_BASE_URL = normalized.endsWith('/api') ? normalized : normalized + '/api';
 
 // Log API configuration in development
 if (import.meta.env.DEV) {
