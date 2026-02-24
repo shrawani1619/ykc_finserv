@@ -243,7 +243,7 @@ const Settings = () => {
         </div>
 
         {/* Profile Form */}
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Full Name
@@ -352,8 +352,22 @@ const Settings = () => {
             </div>
           )}
 
+          {user.lastLoginAt && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Last Login</label>
+              <p className="text-sm text-gray-900 py-2">{new Date(user.lastLoginAt).toLocaleString()}</p>
+            </div>
+          )}
+
+          {user.createdAt && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Joined</label>
+              <p className="text-sm text-gray-900 py-2">{new Date(user.createdAt).toLocaleDateString()}</p>
+            </div>
+          )}
+
           {user.kyc && (user.kyc.pan || user.kyc.aadhaar || user.kyc.gst || user.kyc.verified != null) && (
-            <div className="space-y-2">
+            <div className="md:col-span-2 space-y-2">
               <label className="block text-sm font-medium text-gray-700">KYC</label>
               <div className="rounded-lg border border-gray-200 p-3 space-y-2 bg-gray-50">
                 {user.kyc.pan && <p className="text-sm text-gray-900"><span className="text-gray-600">PAN:</span> {user.kyc.pan}</p>}
@@ -370,7 +384,7 @@ const Settings = () => {
           )}
 
           {user.bankDetails && (user.bankDetails.accountHolderName || user.bankDetails.accountNumber || user.bankDetails.ifsc || user.bankDetails.bankName) && (
-            <div className="space-y-2">
+            <div className="md:col-span-2 space-y-2">
               <label className="block text-sm font-medium text-gray-700">Bank Details</label>
               <div className="rounded-lg border border-gray-200 p-3 space-y-2 bg-gray-50">
                 {user.bankDetails.accountHolderName && <p className="text-sm text-gray-900"><span className="text-gray-600">Account Holder:</span> {user.bankDetails.accountHolderName}</p>}
@@ -381,22 +395,8 @@ const Settings = () => {
             </div>
           )}
 
-          {user.lastLoginAt && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Last Login</label>
-              <p className="text-sm text-gray-900 py-2">{new Date(user.lastLoginAt).toLocaleString()}</p>
-            </div>
-          )}
-
-          {user.createdAt && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Joined</label>
-              <p className="text-sm text-gray-900 py-2">{new Date(user.createdAt).toLocaleDateString()}</p>
-            </div>
-          )}
-
           {user.permissions && user.permissions.length > 0 && (
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Permissions</label>
               <p className="text-sm text-gray-900 py-2 flex flex-wrap gap-1">
                 {user.permissions.map((p) => (
@@ -407,7 +407,7 @@ const Settings = () => {
           )}
 
           {isEditing && (
-            <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+            <div className="md:col-span-2 flex items-center gap-3 pt-4 border-t border-gray-200">
               <button
                 onClick={handleSave}
                 className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"

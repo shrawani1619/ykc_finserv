@@ -83,8 +83,8 @@ const Sidebar = ({ onMinimizeChange }) => {
       </div>
 
       {/* Navigation */}
-      <div className="flex flex-col h-[calc(100vh-73px)] p-4">
-        <div className="flex-1">
+      <div className="flex flex-col h-[calc(100vh-73px)] overflow-hidden p-4">
+        <div className="flex-1 overflow-y-auto min-h-0">
           {!isMinimized && (
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
               Navigation
@@ -114,7 +114,7 @@ const Sidebar = ({ onMinimizeChange }) => {
         </div>
 
         {/* Bottom Menu */}
-        <div className="pt-6 border-t border-gray-200">
+        <div className="pt-6 border-t border-gray-200 flex-shrink-0">
           {!isMinimized && (
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
               Support
