@@ -14,6 +14,7 @@ const AgentForm = ({ agent, onSave, onClose, isSaving = false, fixedManagedBy = 
     phone: '',
     password: '',
     status: 'active',
+    agentType: 'normal', // 'normal' or 'GST'
     // new flexible ownership fields
     managedBy: '',
     managedByModel: defaultManagedByModel, // or 'RelationshipManager'
@@ -120,6 +121,7 @@ const AgentForm = ({ agent, onSave, onClose, isSaving = false, fixedManagedBy = 
         email: agent.email || '',
         phone: agent.phone || agent.mobile || '',
         status: agent.status || 'active',
+        agentType: agent.agentType || 'normal',
         managedBy: managedById,
         managedByModel,
         kyc: agent.kyc || { pan: '', aadhaar: '', gst: '' },
@@ -531,6 +533,24 @@ const AgentForm = ({ agent, onSave, onClose, isSaving = false, fixedManagedBy = 
         {errors.managedBy && <p className="mt-1 text-sm text-red-600">{errors.managedBy}</p>}
       </div>
 
+      {/* Agent Type - Show when franchise creates agent */}
+      {currentUser?.role === 'franchise' && !agent && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Agent Type <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="agentType"
+            value={formData.agentType}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="normal">Normal</option>
+            <option value="GST">GST User</option>
+          </select>
+        </div>
+      )}
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Password {agent ? '(Optional)' : <span className="text-red-500">*</span>}
@@ -670,6 +690,24 @@ const AgentForm = ({ agent, onSave, onClose, isSaving = false, fixedManagedBy = 
           <img src={previewUrl} alt={previewName} className="max-w-full max-h-[70vh] mx-auto" />
         )}
       </Modal>
+
+      {/* Agent Type - Show when editing (for all users) or when franchise creates agent */}
+      {agent && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Agent Type <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="agentType"
+            value={formData.agentType}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="normal">Normal</option>
+            <option value="GST">GST User</option>
+          </select>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">

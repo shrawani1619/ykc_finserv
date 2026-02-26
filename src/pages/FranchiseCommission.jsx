@@ -215,8 +215,8 @@ const FranchiseCommission = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Franchise Commission Limits</h1>
-          <p className="text-sm text-gray-600 mt-1">Manage maximum commission limits for franchise users by bank</p>
+          <h1 className="text-2xl font-bold text-gray-900">Commission Limits</h1>
+          <p className="text-sm text-gray-600 mt-1">Manage maximum commission limits for franchise by bank</p>
         </div>
         <button
           onClick={handleCreate}

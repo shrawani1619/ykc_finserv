@@ -39,6 +39,7 @@ import {
 import StatCard from '../components/StatCard';
 import NotificationDropdown from '../components/NotificationDropdown';
 import AccountantLeads from './AccountantLeads';
+import AccountantInvoices from './AccountantInvoices';
 
 const AccountantDashboard = () => {
     const [activeTab, setActiveTab] = useState('Overview');
@@ -370,6 +371,12 @@ const AccountantDashboard = () => {
                 {!loading && activeTab === 'Leads' && (
                     <div className="w-full">
                         <AccountantLeads />
+                    </div>
+                )}
+
+                {!loading && activeTab === 'Invoices' && (
+                    <div className="w-full">
+                        <AccountantInvoices />
                     </div>
                 )}
             </main>

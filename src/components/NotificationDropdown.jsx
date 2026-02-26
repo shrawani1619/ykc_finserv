@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Check, X } from 'lucide-react'
+import { Bell, Check, X, Image as ImageIcon } from 'lucide-react'
 import api from '../services/api'
+import Modal from './Modal'
+import StatusBadge from './StatusBadge'
 
 const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) => {
   const navigate = useNavigate()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(false)
+  const [selectedBanner, setSelectedBanner] = useState(null)
+  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false)
   const dropdownRef = useRef(null)
 
   useEffect(() => {
@@ -34,7 +38,7 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
     }
   }
 
-  const markAsRead = async (notificationId, redirectTicketId) => {
+  const markAsRead = async (notificationId, redirectTicketId, bannerId) => {
     try {
       if (api.notifications?.markAsRead) {
         await api.notifications.markAsRead(notificationId)
@@ -50,6 +54,17 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
       if (redirectTicketId) {
         onClose?.()
         navigate('/tickets', { state: { openTicketId: redirectTicketId } })
+      } else if (bannerId) {
+        // Fetch banner details and show modal
+        try {
+          const bannerResponse = await api.banners.getById(bannerId)
+          const banner = bannerResponse.data || bannerResponse
+          setSelectedBanner(banner)
+          setIsBannerModalOpen(true)
+          onClose?.()
+        } catch (error) {
+          console.error('Error fetching banner:', error)
+        }
       }
     } catch (err) {
       setNotifications(prev =>
@@ -63,6 +78,17 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
       if (redirectTicketId) {
         onClose?.()
         navigate('/tickets', { state: { openTicketId: redirectTicketId } })
+      } else if (bannerId) {
+        // Fetch banner details and show modal
+        try {
+          const bannerResponse = await api.banners.getById(bannerId)
+          const banner = bannerResponse.data || bannerResponse
+          setSelectedBanner(banner)
+          setIsBannerModalOpen(true)
+          onClose?.()
+        } catch (error) {
+          console.error('Error fetching banner:', error)
+        }
       }
     }
   }
@@ -134,15 +160,19 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
             {notifications.map((notification) => {
               const isUnread = !(notification.isRead ?? notification.read)
               const ticketId = notification.relatedTicketId?._id || notification.relatedTicketId
+              const bannerId = notification.relatedBannerId?._id || notification.relatedBannerId
+              const isBannerNotification = notification.type === 'banner_created' || !!bannerId
               return (
                 <div
                   key={notification._id || notification.id}
                   className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                     isUnread ? 'bg-blue-50/50' : ''
-                  } ${ticketId ? 'cursor-pointer' : ''}`}
+                  } ${ticketId || bannerId ? 'cursor-pointer' : ''}`}
                   onClick={() => {
                     if (ticketId) {
                       markAsRead(notification._id || notification.id, ticketId)
+                    } else if (bannerId) {
+                      markAsRead(notification._id || notification.id, null, bannerId)
                     } else {
                       markAsRead(notification._id || notification.id)
                     }
@@ -163,6 +193,9 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
                       )}
                       {ticketId && (
                         <p className="text-xs text-primary-900 mt-1 font-medium">Click to view service request →</p>
+                      )}
+                      {isBannerNotification && (
+                        <p className="text-xs text-primary-900 mt-1 font-medium">Click to view banner details →</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -205,6 +238,54 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
           </button>
         </div>
       )}
+
+      {/* Banner Details Modal */}
+      <Modal
+        isOpen={isBannerModalOpen}
+        onClose={() => {
+          setIsBannerModalOpen(false)
+          setSelectedBanner(null)
+        }}
+        title="Banner Details"
+        size="md"
+      >
+        {selectedBanner && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">Banner Name</label>
+                <p className="mt-1 text-sm text-gray-900">{selectedBanner.name}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-500">Status</label>
+                <div className="mt-1">
+                  <StatusBadge status={selectedBanner.status} />
+                </div>
+              </div>
+            </div>
+
+            {selectedBanner.attachment && (
+              <div>
+                <label className="text-sm font-medium text-gray-500">Banner Image</label>
+                <div className="mt-2">
+                  <img
+                    src={selectedBanner.attachment}
+                    alt={selectedBanner.name}
+                    className="w-full max-w-md rounded-lg border border-gray-200"
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                      e.target.nextSibling.style.display = 'flex'
+                    }}
+                  />
+                  <div className="w-full max-w-md h-64 bg-gray-200 rounded-lg border border-gray-200 hidden items-center justify-center">
+                    <ImageIcon className="w-12 h-12 text-gray-400" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

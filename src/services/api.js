@@ -742,6 +742,15 @@ export const api = {
     }),
     delete: (id) => apiRequest(`/franchise-commission-limits/${id}`, { method: 'DELETE' }),
   },
+
+  // Company Settings endpoints
+  companySettings: {
+    get: () => apiRequest('/company-settings'),
+    update: (data) => apiRequest('/company-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  },
 };
 
 export default api;

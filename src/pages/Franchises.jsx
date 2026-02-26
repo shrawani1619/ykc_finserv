@@ -58,7 +58,8 @@ const Franchises = () => {
 
   const fetchLeads = async () => {
     try {
-      const response = await api.leads.getAll()
+      // Fetch all leads with a high limit to get accurate statistics
+      const response = await api.leads.getAll({ limit: 10000, page: 1 })
       let leadsData = []
       if (Array.isArray(response)) {
         leadsData = response
@@ -74,7 +75,8 @@ const Franchises = () => {
 
   const fetchAgents = async () => {
     try {
-      const response = await api.agents.getAll()
+      // Fetch all agents with a high limit to get accurate statistics
+      const response = await api.agents.getAll({ limit: 10000, page: 1 })
       const agentsData = response.data || response || []
       setAgents(Array.isArray(agentsData) ? agentsData : [])
     } catch (error) {
@@ -123,19 +125,41 @@ const Franchises = () => {
       return { agents: 0, leads: 0, revenue: 0 }
     }
 
+    const franchiseIdStr = franchiseId?.toString()
+
+    // Filter agents: agents are associated with franchises via managedBy and managedByModel
     const franchiseAgents = agents.filter(agent => {
+      // Exclude sub-agents (those with parentAgent)
+      if (agent.parentAgent) return false
+      
+      // Check if agent is managed by this franchise
+      if (agent.managedByModel === 'Franchise') {
+        const managedById = agent.managedBy?._id || agent.managedBy?.id || agent.managedBy
+        return managedById?.toString() === franchiseIdStr
+      }
+      
+      // Legacy check for direct franchise field
       const agentFranchiseId = agent.franchise?._id || agent.franchise?.id || agent.franchise || agent.franchiseId
-      return agentFranchiseId === franchiseId || agentFranchiseId?.toString() === franchiseId?.toString()
+      return agentFranchiseId?.toString() === franchiseIdStr
     })
 
+    // Filter leads: leads are associated with franchises via associated and associatedModel
     const franchiseLeads = leads.filter(lead => {
+      // Check if lead is associated with this franchise
+      if (lead.associatedModel === 'Franchise') {
+        const associatedId = lead.associated?._id || lead.associated?.id || lead.associated
+        return associatedId?.toString() === franchiseIdStr
+      }
+      
+      // Legacy check for direct franchise field
       const leadFranchiseId = lead.franchise?._id || lead.franchise?.id || lead.franchise || lead.franchiseId
-      return leadFranchiseId === franchiseId || leadFranchiseId?.toString() === franchiseId?.toString()
+      return leadFranchiseId?.toString() === franchiseIdStr
     })
 
+    // Filter invoices: invoices have a direct franchise field
     const franchiseInvoices = invoices.filter(invoice => {
       const invoiceFranchiseId = invoice.franchise?._id || invoice.franchise?.id || invoice.franchise || invoice.franchiseId
-      return invoiceFranchiseId === franchiseId || invoiceFranchiseId?.toString() === franchiseId?.toString()
+      return invoiceFranchiseId?.toString() === franchiseIdStr
     })
 
     const revenue = franchiseInvoices.reduce((sum, inv) => {
@@ -279,6 +303,7 @@ const Franchises = () => {
         password: rest.password || 'Agent@123',
         role: 'agent',
         status: rest.status || 'active',
+        agentType: rest.agentType || 'normal',
         managedBy: rest.managedBy || rest.franchise || rest.managedBy || '',
         managedByModel: rest.managedByModel || (rest.franchise ? 'Franchise' : 'Franchise'),
         kyc: rest.kyc || undefined,
@@ -412,7 +437,15 @@ const Franchises = () => {
       }
     } catch (error) {
       console.error('Error saving franchise:', error)
-      toast.error('Error', error.message || 'Failed to save franchise. Please check your connection and try again.')
+      // Only show toast if it hasn't been shown already by the API service
+      if (!error._toastShown) {
+        const errorMessage = error.message || 'Failed to save franchise. Please check your connection and try again.'
+        if (errorMessage.toLowerCase().includes('email') && errorMessage.toLowerCase().includes('already exists')) {
+          toast.error('Email Already Exists', errorMessage)
+        } else {
+          toast.error('Error', errorMessage)
+        }
+      }
     } finally {
       setIsSavingFranchise(false)
     }
@@ -462,7 +495,6 @@ const Franchises = () => {
                 const stats = getFranchiseStats(f.id || f._id)
                 return {
                   Name: f.name || 'N/A',
-                  'Owner Name': f.ownerName || 'N/A',
                   Email: f.email || 'N/A',
                   City: f.address?.city || 'N/A',
                   State: f.address?.state || 'N/A',
@@ -759,10 +791,6 @@ const Franchises = () => {
               <div>
                 <label className="text-sm font-medium text-gray-500">Franchise Name</label>
                 <p className="mt-1 text-sm text-gray-900">{selectedFranchise.name || 'N/A'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Owner Name</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedFranchise.ownerName || 'N/A'}</p>
               </div>
 
               <div>

@@ -238,6 +238,7 @@ const RelationshipManagers = () => {
         password: rest.password || 'Agent@123',
         role: 'agent',
         status: rest.status || 'active',
+        agentType: rest.agentType || 'normal',
         managedBy: rest.managedBy || rest.franchise || rest.managedBy || '',
         managedByModel: rest.managedByModel || (rest.franchise ? 'Franchise' : 'Franchise'),
         kyc: rest.kyc || undefined,

@@ -77,7 +77,8 @@ const Agents = () => {
 
   const fetchLeads = async () => {
     try {
-      const response = await api.leads.getAll()
+      // Fetch all leads with a high limit to get accurate statistics
+      const response = await api.leads.getAll({ limit: 10000, page: 1 })
       let leadsData = []
       if (Array.isArray(response)) {
         leadsData = response
@@ -147,9 +148,11 @@ const Agents = () => {
     console.log('🔍 DEBUG: Agent leads found:', agentLeads.length)
 
     const total = agentLeads.length
-    const active = agentLeads.filter(lead =>
-      lead.status === 'logged'
-    ).length
+    // Active leads are all leads that are not completed or rejected
+    const active = agentLeads.filter(lead => {
+      const status = lead.status
+      return status && status !== 'completed' && status !== 'rejected'
+    }).length
     const completed = agentLeads.filter(lead => lead.status === 'completed').length
 
     // Calculate commission from invoices (more accurate)
@@ -340,6 +343,7 @@ const Agents = () => {
           mobile: formData.phone || formData.mobile,
           franchise: formData.franchise,
           status: formData.status,
+          agentType: formData.agentType || 'normal',
           kyc: formData.kyc || undefined,
           bankDetails: formData.bankDetails || undefined,
         }
@@ -364,6 +368,7 @@ const Agents = () => {
           password: rest.password || 'Agent@123',
           role: 'agent',
           status: rest.status || 'active',
+          agentType: rest.agentType || 'normal',
           // New unified API expects managedBy + managedByModel for agents.
           // Fall back to legacy `franchise` if provided.
           managedBy: rest.managedBy || rest.franchise || '',

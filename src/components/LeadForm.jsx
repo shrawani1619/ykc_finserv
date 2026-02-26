@@ -51,8 +51,21 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
       smBmMobile: lead?.smBmMobile || leadFormValues.smBmMobile || '',
       commissionPercentage: lead?.commissionPercentage !== undefined && lead?.commissionPercentage !== null ? lead.commissionPercentage : '',
       commissionAmount: lead?.commissionAmount !== undefined && lead?.commissionAmount !== null ? lead.commissionAmount : '',
+      // Agent commission fields (for franchise)
+      agentCommissionPercentage: lead?.agentCommissionPercentage !== undefined && lead?.agentCommissionPercentage !== null ? lead.agentCommissionPercentage : '',
+      agentCommissionAmount: lead?.agentCommissionAmount !== undefined && lead?.agentCommissionAmount !== null ? lead.agentCommissionAmount : '',
+      // Sub-agent commission fields (for agent when selecting sub-agent)
+      subAgentCommissionPercentage: lead?.subAgentCommissionPercentage !== undefined && lead?.subAgentCommissionPercentage !== null ? lead.subAgentCommissionPercentage : '',
+      subAgentCommissionAmount: lead?.subAgentCommissionAmount !== undefined && lead?.subAgentCommissionAmount !== null ? lead.subAgentCommissionAmount : '',
+      // Referral franchise commission fields
+      referralFranchiseCommissionPercentage: lead?.referralFranchiseCommissionPercentage !== undefined && lead?.referralFranchiseCommissionPercentage !== null ? lead.referralFranchiseCommissionPercentage : '',
+      referralFranchiseCommissionAmount: lead?.referralFranchiseCommissionAmount !== undefined && lead?.referralFranchiseCommissionAmount !== null ? lead.referralFranchiseCommissionAmount : '',
     };
   });
+
+  // Admin commission limit for franchise (fetched when bank is selected)
+  const [adminCommissionLimit, setAdminCommissionLimit] = useState(null);
+  const [loadingCommissionLimit, setLoadingCommissionLimit] = useState(false);
 
   // When editing new_lead, RM can assign bank - track it separately for the "Assign Bank" section
   const [assignBankId, setAssignBankId] = useState(lead?.bank?._id || lead?.bank || '');
@@ -69,8 +82,8 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
     return (isRelationshipManager || isFranchise) ? 'self' : '';
   });
   const isSelfSelected = selectedAgentId === 'self';
-  // Allow franchise to set commission even when assigned to self
-  const canSetCommissionForSelf = isFranchise;
+  // Commission cannot be set when assigned to self (for both RM and Franchise)
+  const canSetCommissionForSelf = false;
 
   // Sub-agent selection for agents
   const [subAgents, setSubAgents] = useState([]);
@@ -78,6 +91,16 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
   const [selectedSubAgentId, setSelectedSubAgentId] = useState(() => {
     if (lead?.subAgent) {
       return lead.subAgent._id || lead.subAgent || '';
+    }
+    return '';
+  });
+
+  // Refer Franchise selection
+  const [franchises, setFranchises] = useState([]);
+  const [loadingFranchises, setLoadingFranchises] = useState(false);
+  const [selectedReferFranchiseId, setSelectedReferFranchiseId] = useState(() => {
+    if (lead?.referralFranchise) {
+      return lead.referralFranchise._id || lead.referralFranchise || '';
     }
     return '';
   });
@@ -99,6 +122,24 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
       }
     };
     load();
+  }, []);
+
+  // Fetch franchises for Refer Franchise dropdown
+  useEffect(() => {
+    const loadFranchises = async () => {
+      try {
+        setLoadingFranchises(true);
+        const resp = await api.franchises.getAll();
+        const franchisesData = resp?.data || resp || [];
+        setFranchises(Array.isArray(franchisesData) ? franchisesData : []);
+      } catch (err) {
+        console.error('Failed to load franchises', err);
+        setFranchises([]);
+      } finally {
+        setLoadingFranchises(false);
+      }
+    };
+    loadFranchises();
   }, []);
 
   // Fetch agents for all roles (except agents themselves)
@@ -183,6 +224,88 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
     loadLeadForm();
   }, [selectedBank]);
 
+  // Fetch admin commission limit when bank is selected (for franchise agent commission and referral franchise commission validation)
+  useEffect(() => {
+    const fetchCommissionLimit = async () => {
+      if (!standard.bankId || standard.bankId === NEW_LEAD_OPTION) {
+        setAdminCommissionLimit(null);
+        return;
+      }
+      try {
+        setLoadingCommissionLimit(true);
+        const resp = await api.franchiseCommissionLimits.getByBank(standard.bankId);
+        const limit = resp?.data || null;
+        setAdminCommissionLimit(limit);
+        
+        // Auto-fill agent commission percentage with admin limit value if limit type is percentage (only for franchise)
+        if (isFranchise && limit && limit.limitType === 'percentage' && !lead) {
+          setStandard((p) => {
+            const updated = {
+              ...p,
+              agentCommissionPercentage: limit.maxCommissionValue,
+            };
+            // Auto-calculate agent commission amount if loan amount exists
+            if (p.loanAmount) {
+              const loanAmount = parseFloat(p.loanAmount) || 0;
+              const percentage = parseFloat(limit.maxCommissionValue) || 0;
+              if (loanAmount > 0 && percentage >= 0 && percentage <= 100) {
+                updated.agentCommissionAmount = ((loanAmount * percentage) / 100).toFixed(2);
+              }
+            }
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load commission limit', err);
+        setAdminCommissionLimit(null);
+      } finally {
+        setLoadingCommissionLimit(false);
+      }
+    };
+    fetchCommissionLimit();
+  }, [standard.bankId, lead, isFranchise]);
+
+  // Auto-fill agent commission percentage when franchise selects an agent
+  useEffect(() => {
+    const autoFillAgentCommission = async () => {
+      if (!isFranchise || !selectedAgentId || selectedAgentId === 'self' || lead) {
+        return;
+      }
+      try {
+        const selectedAgent = agents.find(a => (a._id || a.id) === selectedAgentId);
+        if (selectedAgent && selectedAgent.commissionPercentage !== undefined && selectedAgent.commissionPercentage !== null) {
+          const agentPercentage = parseFloat(selectedAgent.commissionPercentage) || 0;
+          
+          // Check if agent percentage exceeds admin limit
+          let finalPercentage = agentPercentage;
+          if (adminCommissionLimit && adminCommissionLimit.limitType === 'percentage') {
+            if (agentPercentage > adminCommissionLimit.maxCommissionValue) {
+              finalPercentage = adminCommissionLimit.maxCommissionValue;
+            }
+          }
+          
+          setStandard((p) => {
+            const updated = {
+              ...p,
+              agentCommissionPercentage: finalPercentage,
+            };
+            // Auto-calculate agent commission amount if loan amount exists
+            if (p.loanAmount) {
+              const loanAmount = parseFloat(p.loanAmount) || 0;
+              if (loanAmount > 0 && finalPercentage >= 0 && finalPercentage <= 100) {
+                updated.agentCommissionAmount = ((loanAmount * finalPercentage) / 100).toFixed(2);
+              }
+            }
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.error('Failed to auto-fill agent commission', err);
+      }
+    };
+    autoFillAgentCommission();
+  }, [isFranchise, selectedAgentId, agents, lead, adminCommissionLimit]);
+
   const handleFieldChange = (key, value) => {
     setFormValues((p) => ({ ...(p || {}), [key]: value }));
     // Synchronize with standard state if key matches a standard field
@@ -221,7 +344,70 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
           updated.commissionAmount = ((loanAmount * percentage) / 100).toFixed(2);
         }
       }
-      
+
+      // Auto-calculate agent commission amount when agent commission percentage changes (for franchise)
+      if (k === 'agentCommissionPercentage' && v && p.loanAmount) {
+        const loanAmount = parseFloat(p.loanAmount) || 0;
+        const percentage = parseFloat(v) || 0;
+        if (loanAmount > 0 && percentage >= 0 && percentage <= 100) {
+          updated.agentCommissionAmount = ((loanAmount * percentage) / 100).toFixed(2);
+        }
+      }
+
+      // Auto-recalculate agent commission amount when loan amount changes (if agent commission percentage exists)
+      if (k === 'loanAmount' && v && p.agentCommissionPercentage) {
+        const loanAmount = parseFloat(v) || 0;
+        const percentage = parseFloat(p.agentCommissionPercentage) || 0;
+        if (loanAmount > 0 && percentage >= 0 && percentage <= 100) {
+          updated.agentCommissionAmount = ((loanAmount * percentage) / 100).toFixed(2);
+        }
+      }
+
+      // Auto-calculate sub-agent commission amount when percentage changes (for agents)
+      if (k === 'subAgentCommissionPercentage' && v && p.loanAmount) {
+        const loanAmount = parseFloat(p.loanAmount) || 0;
+        const percentage = parseFloat(v) || 0;
+        if (loanAmount > 0 && percentage >= 0 && percentage <= 100) {
+          updated.subAgentCommissionAmount = ((loanAmount * percentage) / 100).toFixed(2);
+        }
+      }
+
+      // Auto-calculate sub-agent commission percentage when amount changes
+      if (k === 'subAgentCommissionAmount' && v && p.loanAmount) {
+        const loanAmount = parseFloat(p.loanAmount) || 0;
+        const amount = parseFloat(v) || 0;
+        if (loanAmount > 0 && amount >= 0) {
+          updated.subAgentCommissionPercentage = ((amount / loanAmount) * 100).toFixed(2);
+        }
+      }
+
+      // Auto-calculate referral franchise commission amount when percentage changes
+      if (k === 'referralFranchiseCommissionPercentage' && v && p.loanAmount) {
+        const loanAmount = parseFloat(p.loanAmount) || 0;
+        const percentage = parseFloat(v) || 0;
+        if (loanAmount > 0 && percentage >= 0 && percentage <= 100) {
+          updated.referralFranchiseCommissionAmount = ((loanAmount * percentage) / 100).toFixed(2);
+        }
+      }
+
+      // Auto-calculate referral franchise commission percentage when amount changes
+      if (k === 'referralFranchiseCommissionAmount' && v && p.loanAmount) {
+        const loanAmount = parseFloat(p.loanAmount) || 0;
+        const amount = parseFloat(v) || 0;
+        if (loanAmount > 0 && amount >= 0) {
+          updated.referralFranchiseCommissionPercentage = ((amount / loanAmount) * 100).toFixed(2);
+        }
+      }
+
+      // Auto-recalculate referral franchise commission amount when loan amount changes
+      if (k === 'loanAmount' && v && p.referralFranchiseCommissionPercentage) {
+        const loanAmount = parseFloat(v) || 0;
+        const percentage = parseFloat(p.referralFranchiseCommissionPercentage) || 0;
+        if (loanAmount > 0 && percentage >= 0 && percentage <= 100) {
+          updated.referralFranchiseCommissionAmount = ((loanAmount * percentage) / 100).toFixed(2);
+        }
+      }
+
       return updated;
     });
     if (k === 'bankId') setSelectedBank(v);
@@ -275,9 +461,10 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
       return toast.error(isNewLead ? 'No New Lead form configured. Ask Admin to set up in Lead Forms.' : 'No Lead Form configured for this bank');
     }
 
-    // Validate commission fields only for bank-type leads (Admin/Accountant/Relationship Manager/Franchise)
-    // But skip validation if RM assigned lead to self (Franchise can set commission even when assigned to self)
-    if (canSetCommission && !isNewLead && !(isRelationshipManager && isSelfSelected && !canSetCommissionForSelf)) {
+    // Validate commission fields only for bank-type leads (Admin/Accountant/Relationship Manager)
+    // Skip for Franchise (they use Agent Commission Details instead)
+    // But skip validation if RM or Franchise assigned lead to self
+    if (canSetCommission && !isNewLead && !isFranchise && !((isRelationshipManager || isFranchise) && isSelfSelected && !canSetCommissionForSelf)) {
       // When creating, both fields are required
       if (!lead) {
         if (!standard.commissionPercentage || standard.commissionPercentage === '') {
@@ -298,38 +485,73 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
           return toast.error('Commission Amount must be a positive number');
         }
       }
+    }
 
-      // Validate franchise commission limits (only for franchise users)
-      if (isFranchise && standard.bankId) {
-        try {
-          const limitResponse = await api.franchiseCommissionLimits.getByBank(standard.bankId);
-          const commissionLimit = limitResponse.data;
+    // For agents: if a sub-agent is selected on a bank lead, require sub-agent commission %
+    if (isAgent && !lead && !isNewLead && selectedSubAgentId) {
+      if (!standard.subAgentCommissionPercentage || standard.subAgentCommissionPercentage === '') {
+        return toast.error('Sub Agent Commission Percentage is required when a Sub Agent is selected');
+      }
+      const pct = parseFloat(standard.subAgentCommissionPercentage) || 0;
+      if (pct < 0 || pct > 100) {
+        return toast.error('Sub Agent Commission Percentage must be between 0 and 100');
+      }
+    }
 
-          if (commissionLimit) {
-            let exceedsLimit = false;
-            let errorMessage = '';
+    // Validate agent commission for franchise (when not assigned to self and creating bank leads)
+    if (isFranchise && !isNewLead && !isSelfSelected) {
+      if (!standard.agentCommissionPercentage || standard.agentCommissionPercentage === '') {
+        return toast.error('Agent Commission Percentage is required');
+      }
+      if (!standard.loanAmount || standard.loanAmount <= 0) {
+        return toast.error('Loan Amount is required to calculate Agent Commission');
+      }
+      
+      // Validate agent commission percentage against admin limit
+      if (adminCommissionLimit && adminCommissionLimit.limitType === 'percentage') {
+        const agentPercentage = parseFloat(standard.agentCommissionPercentage) || 0;
+        if (agentPercentage > adminCommissionLimit.maxCommissionValue) {
+          return toast.error(`Agent Commission Percentage cannot exceed Admin maximum limit of ${parseFloat(adminCommissionLimit.maxCommissionValue).toFixed(2)}%`);
+        }
+      }
+      
+      // Validate agent commission percentage is between 0 and 100
+      const agentPercentage = parseFloat(standard.agentCommissionPercentage) || 0;
+      if (agentPercentage < 0 || agentPercentage > 100) {
+        return toast.error('Agent Commission Percentage must be between 0 and 100');
+      }
 
-            if (commissionLimit.limitType === 'percentage') {
-              const franchisePercentage = standard.commissionPercentage ? parseFloat(standard.commissionPercentage) : 0;
-              if (franchisePercentage > commissionLimit.maxCommissionValue) {
-                exceedsLimit = true;
-                errorMessage = `Commission cannot exceed Admin maximum limit of ${commissionLimit.maxCommissionValue}%`;
-              }
-            } else if (commissionLimit.limitType === 'amount') {
-              const franchiseAmount = standard.commissionAmount ? parseFloat(standard.commissionAmount) : 0;
-              if (franchiseAmount > commissionLimit.maxCommissionValue) {
-                exceedsLimit = true;
-                errorMessage = `Commission cannot exceed Admin maximum limit of ₹${commissionLimit.maxCommissionValue.toLocaleString()}`;
-              }
-            }
+      // Validate agent commission amount is calculated correctly
+      const loanAmount = parseFloat(standard.loanAmount) || 0;
+      const expectedAmount = ((loanAmount * agentPercentage) / 100).toFixed(2);
+      const actualAmount = parseFloat(standard.agentCommissionAmount) || 0;
+      if (Math.abs(actualAmount - parseFloat(expectedAmount)) > 0.01) {
+        return toast.error('Agent Commission Amount does not match calculated value. Please ensure Loan Amount is entered.');
+      }
+    }
 
-            if (exceedsLimit) {
-              return toast.error('Commission Limit Exceeded', errorMessage);
-            }
+    // Validate referral franchise commission (when referral franchise is selected)
+    if (selectedReferFranchiseId && !isNewLead) {
+      if (standard.referralFranchiseCommissionPercentage !== undefined && standard.referralFranchiseCommissionPercentage !== null && standard.referralFranchiseCommissionPercentage !== '') {
+        const referralPercentage = parseFloat(standard.referralFranchiseCommissionPercentage) || 0;
+        
+        // Validate referral franchise commission percentage against admin limit
+        if (adminCommissionLimit && adminCommissionLimit.limitType === 'percentage') {
+          if (referralPercentage > adminCommissionLimit.maxCommissionValue) {
+            return toast.error(`Referral Franchise Commission Percentage cannot exceed Admin maximum limit of ${parseFloat(adminCommissionLimit.maxCommissionValue).toFixed(2)}%`);
           }
-        } catch (error) {
-          console.error('Error checking franchise commission limit:', error);
-          // Don't block submission if limit check fails, but log the error
+        }
+        
+        // Validate referral franchise commission percentage is between 0 and 100
+        if (referralPercentage < 0 || referralPercentage > 100) {
+          return toast.error('Referral Franchise Commission Percentage must be between 0 and 100');
+        }
+      }
+      
+      if (standard.referralFranchiseCommissionAmount !== undefined && standard.referralFranchiseCommissionAmount !== null && standard.referralFranchiseCommissionAmount !== '') {
+        const referralAmount = parseFloat(standard.referralFranchiseCommissionAmount) || 0;
+        if (referralAmount < 0) {
+          return toast.error('Referral Franchise Commission Amount must be a positive number');
         }
       }
     }
@@ -393,14 +615,34 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
       documents: (uploadedDocs || []).map((d) => ({ documentType: d.documentType, url: d.url })),
     };
 
-    // Add sub-agent assignment for agents
+    // Add sub-agent assignment and commission for agents
     if (isAgent && selectedSubAgentId && selectedSubAgentId !== '') {
       payload.subAgent = selectedSubAgentId;
+
+      // Sub-agent commission fields (optional)
+      if (standard.subAgentCommissionPercentage !== undefined && standard.subAgentCommissionPercentage !== null && standard.subAgentCommissionPercentage !== '') {
+        payload.subAgentCommissionPercentage = parseFloat(standard.subAgentCommissionPercentage);
+      }
+      if (standard.subAgentCommissionAmount !== undefined && standard.subAgentCommissionAmount !== null && standard.subAgentCommissionAmount !== '') {
+        payload.subAgentCommissionAmount = parseFloat(standard.subAgentCommissionAmount);
+      }
     }
 
     // Add agent assignment for relationship managers and franchise owners
     if ((isRelationshipManager || isFranchise) && selectedAgentId && selectedAgentId !== '') {
       payload.agent = selectedAgentId === 'self' ? currentUser._id || currentUser.id : selectedAgentId;
+    }
+
+    // Add referred franchise if selected (this is different from associated franchise)
+    if (selectedReferFranchiseId && selectedReferFranchiseId !== '') {
+      payload.referralFranchise = selectedReferFranchiseId;
+      // Add referral franchise commission if provided
+      if (standard.referralFranchiseCommissionPercentage !== undefined && standard.referralFranchiseCommissionPercentage !== null && standard.referralFranchiseCommissionPercentage !== '') {
+        payload.referralFranchiseCommissionPercentage = parseFloat(standard.referralFranchiseCommissionPercentage);
+      }
+      if (standard.referralFranchiseCommissionAmount !== undefined && standard.referralFranchiseCommissionAmount !== null && standard.referralFranchiseCommissionAmount !== '') {
+        payload.referralFranchiseCommissionAmount = parseFloat(standard.referralFranchiseCommissionAmount);
+      }
     }
 
     // Standard fields for non-agents
@@ -418,14 +660,24 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
       payload.remarks = standard.remarks?.trim() || undefined;
       payload.smBmEmail = standard.smBmEmail?.trim() || undefined;
       payload.smBmMobile = standard.smBmMobile?.trim() || undefined;
+      
+      // Agent commission fields for franchise (when not assigned to self)
+      if (isFranchise && !isSelfSelected && !isNewLead) {
+        payload.agentCommissionPercentage = standard.agentCommissionPercentage !== undefined && standard.agentCommissionPercentage !== null && standard.agentCommissionPercentage !== ''
+          ? parseFloat(standard.agentCommissionPercentage)
+          : undefined;
+        payload.agentCommissionAmount = standard.agentCommissionAmount !== undefined && standard.agentCommissionAmount !== null && standard.agentCommissionAmount !== ''
+          ? parseFloat(standard.agentCommissionAmount)
+          : undefined;
+      }
     }
 
     // Bank-specific fields only for bank-type leads
     if (!isNewLead) {
       payload.loanType = standard.loanType || formValues?.loanType || undefined;
       payload.loanAmount = (standard.loanAmount || formValues?.loanAmount) ? Number(standard.loanAmount || formValues?.loanAmount) : undefined;
-      // Only set commission if not assigned to self (except for franchise)
-      if (canSetCommission && !(isRelationshipManager && isSelfSelected && !canSetCommissionForSelf)) {
+      // Only set commission if not assigned to self (for Admin/Accountant/RM, not Franchise - they use Agent Commission)
+      if (canSetCommission && !isFranchise && !((isRelationshipManager || isFranchise) && isSelfSelected && !canSetCommissionForSelf)) {
         payload.commissionPercentage = (standard.commissionPercentage !== undefined && standard.commissionPercentage !== null && standard.commissionPercentage !== '') 
           ? parseFloat(standard.commissionPercentage) 
           : (standard.commissionPercentage === 0 ? 0 : undefined);
@@ -441,8 +693,8 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
       payload.loanAmount = (standard.loanAmount || formValues?.loanAmount) ? Number(standard.loanAmount || formValues?.loanAmount) : undefined;
       payload.loanAccountNo = standard.loanAccountNo || formValues?.loanAccountNo || undefined;
       payload.branch = standard.branch || formValues?.branch || undefined;
-      // Only set commission if not assigned to self (except for franchise)
-      if (canSetCommission && !(isRelationshipManager && isSelfSelected && !canSetCommissionForSelf)) {
+      // Only set commission if not assigned to self (for both RM and Franchise)
+      if (canSetCommission && !((isRelationshipManager || isFranchise) && isSelfSelected && !canSetCommissionForSelf)) {
         payload.commissionPercentage = (standard.commissionPercentage !== undefined && standard.commissionPercentage !== null && standard.commissionPercentage !== '') 
           ? parseFloat(standard.commissionPercentage) 
           : (standard.commissionPercentage === 0 ? 0 : undefined);
@@ -498,30 +750,55 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Sub-Agent Selection Dropdown - For agents when creating new leads */}
                 {isAgent && !lead && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                      Select Sub Agent (Optional)
-                    </label>
-                    <select
-                      value={selectedSubAgentId}
-                      onChange={(e) => setSelectedSubAgentId(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                      disabled={loadingSubAgents}
-                    >
-                      <option value="">-- Select Sub Agent --</option>
-                      {subAgents.map((subAgent) => (
-                        <option key={subAgent._id || subAgent.id} value={subAgent._id || subAgent.id}>
-                          {subAgent.name || subAgent.email || 'Unknown Sub Agent'}
-                        </option>
-                      ))}
-                    </select>
-                    {loadingSubAgents && (
-                      <p className="text-sm text-gray-500 mt-1">Loading sub-agents...</p>
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Select Sub Agent (Optional)
+                      </label>
+                      <select
+                        value={selectedSubAgentId}
+                        onChange={(e) => setSelectedSubAgentId(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        disabled={loadingSubAgents}
+                      >
+                        <option value="">-- Select Sub Agent --</option>
+                        {subAgents.map((subAgent) => (
+                          <option key={subAgent._id || subAgent.id} value={subAgent._id || subAgent.id}>
+                            {subAgent.name || subAgent.email || 'Unknown Sub Agent'}
+                          </option>
+                        ))}
+                      </select>
+                      {loadingSubAgents && (
+                        <p className="text-sm text-gray-500 mt-1">Loading sub-agents...</p>
+                      )}
+                      {!loadingSubAgents && subAgents.length === 0 && (
+                        <p className="text-sm text-gray-500 mt-1">No sub-agents available. Create sub-agents from Sub Agents page.</p>
+                      )}
+                    </div>
+
+                    {selectedSubAgentId && (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                          Sub Agent Commission (%)
+                        </label>
+                        <input
+                          type="number"
+                          value={standard.subAgentCommissionPercentage}
+                          onChange={(e) => handleStandardChange('subAgentCommissionPercentage', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                          placeholder="Enter sub-agent commission %"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                        />
+                        {standard.loanAmount && standard.subAgentCommissionPercentage && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Approx. sub-agent commission amount will be calculated automatically based on loan amount.
+                          </p>
+                        )}
+                      </div>
                     )}
-                    {!loadingSubAgents && subAgents.length === 0 && (
-                      <p className="text-sm text-gray-500 mt-1">No sub-agents available. Create sub-agents from Sub Agents page.</p>
-                    )}
-                  </div>
+                  </>
                 )}
                 {((leadFormDef.agentFields && leadFormDef.agentFields.length > 0) 
                   ? leadFormDef.agentFields 
@@ -530,17 +807,25 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
                     const key = (f.key || '').toLowerCase();
                     const label = (f.label || '').toLowerCase();
 
-                    // For New Lead: show all fields admin selected (including leadName, customerName)
-                    if (isNewLead) return true;
+                    // For New Lead: show ALL fields admin selected (including leadName, customerName, etc.)
+                    // This ensures that any field configured in the Lead Forms builder will be shown
+                    if (isNewLead) {
+                      return true;
+                    }
 
-                    // For bank forms: exclude system-handled fields
+                    // For bank forms: exclude only truly system-handled fields
+                    // Note: leadname and customername are NOT excluded here because admins may
+                    // explicitly configure these fields in agentFields for agents to use
+                    // Only exclude by exact key match to avoid false positives with field labels
                     const excludedKeys = [
-                      'applicantEmail', 'applicantMobile', 'customerName', 'leadName',
-                      'asmName', 'asmEmail', 'asmMobile',
-                      'smBmName', 'smBmEmail', 'smBmMobile',
-                      'salary', 'Salary'
+                      'applicantemail', 'applicantmobile',
+                      'asmname', 'asmemail', 'asmmobile',
+                      'smbmname', 'smbmemail', 'smbmmobile',
+                      'salary'
                     ];
-                    if (excludedKeys.some(excluded => key === excluded.toLowerCase() || label.includes(excluded.toLowerCase()))) {
+                    // Only exclude if the field key exactly matches an excluded key
+                    // This prevents excluding fields like "Lead Name" just because the label contains "lead"
+                    if (excludedKeys.includes(key)) {
                       return false;
                     }
                     return true;
@@ -632,6 +917,82 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
                       <p className="text-sm text-gray-500 mt-1">Loading agents...</p>
                     )}
                   </div>
+                )}
+
+                {/* Refer Franchise Dropdown */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    Refer Franchise
+                  </label>
+                  <select
+                    value={selectedReferFranchiseId}
+                    onChange={(e) => {
+                      setSelectedReferFranchiseId(e.target.value);
+                      // Reset commission when franchise is deselected
+                      if (!e.target.value) {
+                        setStandard((p) => ({
+                          ...p,
+                          referralFranchiseCommissionPercentage: '',
+                          referralFranchiseCommissionAmount: '',
+                        }));
+                      }
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                    disabled={loadingFranchises}
+                  >
+                    <option value="">-- Select Franchise (Optional) --</option>
+                    {franchises.map((franchise) => (
+                      <option key={franchise._id || franchise.id} value={franchise._id || franchise.id}>
+                        {franchise.name || franchise.email || 'Unknown Franchise'}
+                      </option>
+                    ))}
+                  </select>
+                  {loadingFranchises && (
+                    <p className="text-sm text-gray-500 mt-1">Loading franchises...</p>
+                  )}
+                  {!loadingFranchises && franchises.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">No franchises available.</p>
+                  )}
+                </div>
+
+                {/* Referral Franchise Commission Fields - Show when referral franchise is selected */}
+                {selectedReferFranchiseId && !isNewLead && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Referral Franchise Commission Percentage (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={standard.referralFranchiseCommissionPercentage || ''}
+                        onChange={(e) => handleStandardChange('referralFranchiseCommissionPercentage', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        max={adminCommissionLimit && adminCommissionLimit.limitType === 'percentage' ? adminCommissionLimit.maxCommissionValue : 100}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Referral Franchise Commission Amount (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={standard.referralFranchiseCommissionAmount || ''}
+                        onChange={(e) => handleStandardChange('referralFranchiseCommissionAmount', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                      />
+                      {standard.loanAmount && parseFloat(standard.loanAmount) > 0 && standard.referralFranchiseCommissionPercentage && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Commission amount will be calculated automatically based on loan amount.
+                        </p>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 {/* Customer Name */}
@@ -731,17 +1092,6 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
                   </div>
                 )}
 
-                {/* Lead Name */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Lead Name</label>
-                  <input
-                    type="text"
-                    value={standard.leadName || ''}
-                    onChange={(e) => handleStandardChange('leadName', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                  />
-                </div>
-
                 {/* DSA Code - required for bank leads */}
                 {!isNewLead && (
                   <div>
@@ -828,8 +1178,8 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
                   </div>
                   {assignBankId && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                      {/* Only show commission fields if not assigned to self (but allow franchise) */}
-                      {!(isRelationshipManager && isSelfSelected && !canSetCommissionForSelf) && (
+                      {/* Only show commission fields if not assigned to self (for both RM and Franchise) */}
+                      {!((isRelationshipManager || isFranchise) && isSelfSelected && !canSetCommissionForSelf) && (
                         <>
                           <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Commission Percentage (%)</label>
@@ -858,8 +1208,8 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
                           </div>
                         </>
                       )}
-                      {/* Show message when RM assigns to self (but not for franchise) */}
-                      {isRelationshipManager && isSelfSelected && !canSetCommissionForSelf && (
+                      {/* Show message when RM or Franchise assigns to self */}
+                      {(isRelationshipManager || isFranchise) && isSelfSelected && !canSetCommissionForSelf && (
                         <div className="col-span-2">
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                             <p className="text-sm text-yellow-800 font-medium">
@@ -895,8 +1245,9 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
               )}
 
               {/* Commission Fields - Only for bank-type leads and non-agents */}
-              {/* Disabled if RM assigned lead to self (but allow franchise) */}
-              {canSetCommission && !isNewLead && !isAgent && !(isRelationshipManager && isSelfSelected && !canSetCommissionForSelf) && (
+              {/* Hidden if RM or Franchise assigned lead to self */}
+              {/* For franchise, show Agent Commission Details instead, so hide this section */}
+              {canSetCommission && !isNewLead && !isAgent && !isFranchise && !((isRelationshipManager || isFranchise) && isSelfSelected && !canSetCommissionForSelf) && (
                 <div className="border-t pt-6 space-y-4">
                   <h5 className="font-bold text-gray-800">Commission Details</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -934,8 +1285,63 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
                   </div>
                 </div>
               )}
-              {/* Show message when RM assigns to self (but not for franchise) */}
-              {isRelationshipManager && isSelfSelected && !isNewLead && !canSetCommissionForSelf && (
+
+              {/* Agent Commission Fields - Only for Franchise when creating bank leads and not assigned to self */}
+              {isFranchise && !isNewLead && !isAgent && !isSelfSelected && (
+                <div className="border-t pt-6 space-y-4">
+                  <h5 className="font-bold text-gray-800">Agent Commission Details</h5>
+                  {loadingCommissionLimit && (
+                    <p className="text-sm text-gray-500">Loading commission limit...</p>
+                  )}
+                  {adminCommissionLimit && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                      <p className="text-sm text-blue-800 font-medium">
+                        Admin Maximum Limit: {adminCommissionLimit.limitType === 'percentage' 
+                          ? `${parseFloat(adminCommissionLimit.maxCommissionValue).toFixed(2)}%` 
+                          : `₹${adminCommissionLimit.maxCommissionValue.toLocaleString()}`}
+                      </p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Agent Commission Percentage (%) *
+                      </label>
+                      <input
+                        type="number"
+                        value={standard.agentCommissionPercentage || ''}
+                        onChange={(e) => handleStandardChange('agentCommissionPercentage', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        max={adminCommissionLimit && adminCommissionLimit.limitType === 'percentage' ? adminCommissionLimit.maxCommissionValue : 100}
+                        required
+                      />
+                      {adminCommissionLimit && adminCommissionLimit.limitType === 'percentage' && (
+                        <p className="text-xs text-gray-500 mt-1">Max: {parseFloat(adminCommissionLimit.maxCommissionValue).toFixed(2)}%</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Agent Commission Amount (₹) *
+                      </label>
+                      <input
+                        type="number"
+                        value={standard.agentCommissionAmount || ''}
+                        onChange={(e) => handleStandardChange('agentCommissionAmount', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-gray-50"
+                        placeholder="Auto-calculated"
+                        step="0.01"
+                        min="0"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Show message when RM or Franchise assigns to self */}
+              {(isRelationshipManager || isFranchise) && isSelfSelected && !isNewLead && !canSetCommissionForSelf && (
                 <div className="border-t pt-6">
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-sm text-yellow-800 font-medium">

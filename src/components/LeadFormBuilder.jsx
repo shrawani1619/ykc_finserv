@@ -50,13 +50,14 @@ export default function LeadFormBuilder({ onSaved }) {
             const label = (f.label || '').toLowerCase();
             
             // Fields to exclude
+            // Note: leadname and customername are NOT excluded here because admins may
+            // explicitly configure these fields in agentFields for agents to use
             const excludedKeys = [
               'applicantemail', 'applicant_email', 'applicant-email',
               'applicantmobile', 'applicant_mobile', 'applicant-mobile',
               'asm', 'asmname', 'asm_name', 'asm-name',
               'asmemail', 'asm_email', 'asm-email',
               'asmmobile', 'asm_mobile', 'asm-mobile',
-              'customername', 'customer_name', 'customer-name', 'leadname', 'lead_name', 'lead-name',
               'salary', 'Salary',
               'commissionpercentage', 'commission_percentage', 'commission-percentage', 'commissionpercent', 'commission_percent', 'commission-percent',
               'commissionamount', 'commission_amount', 'commission-amount', 'commissionamt', 'commission_amt', 'commission-amt',
@@ -76,9 +77,7 @@ export default function LeadFormBuilder({ onSaved }) {
             if (label.includes('applicant') && (label.includes('email') || label.includes('mobile'))) {
               return false;
             }
-            if (label.includes('customer name') || label.includes('lead name')) {
-              return false;
-            }
+            // Note: Removed check for 'customer name' and 'lead name' - admins can now configure these fields
             if (label.includes('salary')) {
               return false;
             }
@@ -190,13 +189,14 @@ export default function LeadFormBuilder({ onSaved }) {
           // Skip duplicate DSA Code handling below - fall through
         } else {
           // For bank forms: exclude system-handled fields
+          // Note: leadname and customername are NOT excluded here because admins may
+          // explicitly configure these fields in agentFields for agents to use
           const excludedKeys = [
             'applicantemail', 'applicant_email', 'applicant-email',
             'applicantmobile', 'applicant_mobile', 'applicant-mobile',
             'asm', 'asmname', 'asm_name', 'asm-name',
             'asmemail', 'asm_email', 'asm-email',
             'asmmobile', 'asm_mobile', 'asm-mobile',
-            'customername', 'customer_name', 'customer-name', 'leadname', 'lead_name', 'lead-name',
             'salary', 'Salary',
             'commissionpercentage', 'commission_percentage', 'commission-percentage', 'commissionpercent', 'commission_percent', 'commission-percent',
             'commissionamount', 'commission_amount', 'commission-amount', 'commissionamt', 'commission_amt', 'commission-amt',
@@ -207,7 +207,7 @@ export default function LeadFormBuilder({ onSaved }) {
           }
           if (label.includes('asm') || key.includes('asm')) return false;
           if (label.includes('applicant') && (label.includes('email') || label.includes('mobile'))) return false;
-          if (label.includes('customer name') || label.includes('lead name')) return false;
+          // Note: Removed check for 'customer name' and 'lead name' - admins can now configure these fields
           if (label.includes('salary')) return false;
           if (label.includes('commission') || key.includes('commission') || label.includes('comission') || key.includes('comission')) return false;
         }
@@ -308,17 +308,18 @@ export default function LeadFormBuilder({ onSaved }) {
                 const label = (k.label || '').toLowerCase();
 
                 // Always include basic lead fields (Lead Name, Mobile, Email, Address)
-                const includeKeys = ['leadname', 'mobile', 'email', 'address'];
+                const includeKeys = ['leadname', 'lead_name', 'lead-name', 'mobile', 'email', 'address'];
                 if (includeKeys.includes(key)) return true;
 
                 // Fields to exclude
+                // Note: leadname and customername are NOT excluded here because admins may
+                // explicitly configure these fields in agentFields for agents to use
                 const excludedKeys = [
                   'applicantemail', 'applicant_email', 'applicant-email',
                   'applicantmobile', 'applicant_mobile', 'applicant-mobile',
                   'asm', 'asmname', 'asm_name', 'asm-name',
                   'asmemail', 'asm_email', 'asm-email',
                   'asmmobile', 'asm_mobile', 'asm-mobile',
-                  'customername', 'customer_name', 'customer-name', 'leadname', 'lead_name', 'lead-name',
                   'salary', 'Salary',
                   'commissionpercentage', 'commission_percentage', 'commission-percentage', 'commissionpercent', 'commission_percent', 'commission-percent',
                   'commissionamount', 'commission_amount', 'commission-amount', 'commissionamt', 'commission_amt', 'commission-amt',
@@ -338,9 +339,7 @@ export default function LeadFormBuilder({ onSaved }) {
                 if (label.includes('applicant') && (label.includes('email') || label.includes('mobile'))) {
                   return false;
                 }
-                if (label.includes('customer name') || label.includes('lead name')) {
-                  return false;
-                }
+                // Note: Removed check for 'customer name' and 'lead name' - admins can now configure these fields
                 if (label.includes('salary')) {
                   return false;
                 }

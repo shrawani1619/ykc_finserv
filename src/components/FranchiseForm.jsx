@@ -15,6 +15,7 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
     mobile: '',
     password: '',
     status: 'active',
+    franchiseType: 'normal',
     regionalManager: '',
     relationshipManager: '',
     address: {
@@ -59,6 +60,7 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
         mobile: franchise.mobile || '',
         password: '',
         status: franchise.status || 'active',
+        franchiseType: franchise.franchiseType || 'normal',
         regionalManager: franchise.regionalManager?._id || franchise.regionalManager || '',
         relationshipManager: '',
         address: {
@@ -77,7 +79,6 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
   const validate = () => {
     const newErrors = {}
     if (!formData.name.trim()) newErrors.name = 'Franchise name is required'
-    if (!formData.ownerName.trim()) newErrors.ownerName = 'Owner name is required'
     if (isCreate) {
       if (!formData.email?.trim()) newErrors.email = 'Email is required for login'
       if (!formData.mobile?.trim()) newErrors.mobile = 'Mobile is required'
@@ -220,21 +221,6 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
         {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Owner Name <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          name="ownerName"
-          value={formData.ownerName}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.ownerName ? 'border-red-500' : 'border-gray-300'
-            }`}
-          placeholder="Enter owner name"
-        />
-        {errors.ownerName && <p className="mt-1 text-sm text-red-600">{errors.ownerName}</p>}
-      </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -247,7 +233,7 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
           onChange={handleChange}
           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.email ? 'border-red-500' : 'border-gray-300'
             }`}
-          placeholder="Owner login email"
+          placeholder="login email"
         />
         {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
       </div>
@@ -263,7 +249,7 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
           onChange={handleChange}
           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.mobile ? 'border-red-500' : 'border-gray-300'
             }`}
-          placeholder="Owner mobile number"
+          placeholder="mobile number"
         />
         {errors.mobile && <p className="mt-1 text-sm text-red-600">{errors.mobile}</p>}
       </div>
@@ -272,7 +258,7 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
         <>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Owner Login Password <span className="text-red-500">*</span>
+              Login Password <span className="text-red-500">*</span>
             </label>
             <input
               type="password"
@@ -503,6 +489,23 @@ const FranchiseForm = ({ franchise, onSave, onClose, isSaving = false }) => {
           <option value="inactive">Inactive</option>
         </select>
       </div>
+
+      {canAssignRM && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Franchise Type <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="franchiseType"
+            value={formData.franchiseType}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="normal">Normal</option>
+            <option value="GST">GST</option>
+          </select>
+        </div>
+      )}
 
       {isAdmin && (
         <div>

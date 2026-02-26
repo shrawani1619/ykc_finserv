@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, FileText, Calendar, CheckCircle, ChevronDown, ChevronUp, FileDown, Download } from 'lucide-react'
-import IndianRupeeIcon from '../components/IndianRupeeIcon'
+import { Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, FileText, Calendar, CheckCircle, ChevronDown, ChevronUp, FileDown, Download, DollarSign } from 'lucide-react'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
@@ -14,7 +13,7 @@ import { authService } from '../services/auth.service'
 import { downloadInvoicePDF } from '../utils/generateInvoicePDF'
 import { preloadRobotoFont, getCachedRobotoFont } from '../utils/robotoFont'
 
-const Invoices = () => {
+const AccountantInvoices = () => {
   const userRole = authService.getUser()?.role || ''
   const isAdmin = userRole === 'super_admin'
   const isAccountant = userRole === 'accounts_manager'
@@ -81,6 +80,39 @@ const Invoices = () => {
     } catch (error) {
       console.error('Error fetching leads:', error)
       setLeads([])
+    }
+  }
+
+  // Download invoice per lead as PDF
+  const handleDownloadInvoice = async (invoice) => {
+    try {
+      const invoiceId = invoice.id || invoice._id
+      if (!invoiceId) {
+        toast.error('Error', 'Invoice ID is missing')
+        return
+      }
+
+      // Get full invoice details with populated fields
+      const invoiceDetails = await api.invoices.getById(invoiceId)
+      const invoiceData = invoiceDetails.data || invoiceDetails
+
+      // Get company settings
+      const companySettingsResponse = await api.companySettings.get()
+      const companySettings = companySettingsResponse.data || companySettingsResponse || {}
+
+      // Preload Roboto font if not already cached
+      let robotoFontBase64 = getCachedRobotoFont()
+      if (!robotoFontBase64) {
+        await preloadRobotoFont()
+        robotoFontBase64 = getCachedRobotoFont()
+      }
+
+      // Download as PDF with Roboto font
+      downloadInvoicePDF(invoiceData, companySettings, null, robotoFontBase64)
+      toast.success('Success', 'Invoice PDF downloaded successfully')
+    } catch (error) {
+      console.error('Error downloading invoice:', error)
+      toast.error('Error', error.message || 'Failed to download invoice')
     }
   }
 
@@ -190,42 +222,8 @@ const Invoices = () => {
     setIsDetailModalOpen(true)
   }
 
-  // Download invoice per lead as PDF
-  const handleDownloadInvoice = async (invoice) => {
-    try {
-      const invoiceId = invoice.id || invoice._id
-      if (!invoiceId) {
-        toast.error('Error', 'Invoice ID is missing')
-        return
-      }
-
-      // Get full invoice details with populated fields
-      const invoiceDetails = await api.invoices.getById(invoiceId)
-      const invoiceData = invoiceDetails.data || invoiceDetails
-
-      // Get company settings
-      const companySettingsResponse = await api.companySettings.get()
-      const companySettings = companySettingsResponse.data || companySettingsResponse || {}
-
-      // Preload Roboto font if not already cached
-      let robotoFontBase64 = getCachedRobotoFont()
-      if (!robotoFontBase64) {
-        await preloadRobotoFont()
-        robotoFontBase64 = getCachedRobotoFont()
-      }
-
-      // Download as PDF with Roboto font
-      downloadInvoicePDF(invoiceData, companySettings, null, robotoFontBase64)
-      toast.success('Success', 'Invoice PDF downloaded successfully')
-    } catch (error) {
-      console.error('Error downloading invoice:', error)
-      toast.error('Error', error.message || 'Failed to download invoice')
-    }
-  }
-
   const handleSave = async (formData) => {
     try {
-      // Validate required fields
       if (!formData.lead) {
         toast.error('Error', 'Lead is required')
         return
@@ -250,14 +248,11 @@ const Invoices = () => {
         toast.error('Error', 'Net payable amount is required')
         return
       }
-      // Validate status enum
       const validStatuses = ['draft', 'pending', 'approved', 'rejected', 'escalated', 'paid']
       if (!validStatuses.includes(formData.status)) {
         toast.error('Error', `Invalid status. Must be one of: ${validStatuses.join(', ')}`)
         return
       }
-
-      console.log('🔍 DEBUG: Creating/updating invoice with data:', JSON.stringify(formData, null, 2))
 
       if (selectedInvoice) {
         const invoiceId = selectedInvoice.id || selectedInvoice._id
@@ -267,20 +262,19 @@ const Invoices = () => {
         }
         await api.invoices.update(invoiceId, formData)
         await fetchInvoices()
-        await fetchLeads() // Refresh leads to update statistics
+        await fetchLeads()
         setIsEditModalOpen(false)
         toast.success('Success', 'Invoice updated successfully')
       } else {
         await api.invoices.create(formData)
         await fetchInvoices()
-        await fetchLeads() // Refresh leads to update statistics
+        await fetchLeads()
         setIsCreateModalOpen(false)
         toast.success('Success', 'Invoice created successfully')
       }
       setSelectedInvoice(null)
     } catch (error) {
       console.error('Error saving invoice:', error)
-      // Only show toast if API error handler hasn't already shown it
       if (!error._toastShown) {
         toast.error('Error', error.message || 'Failed to save invoice')
       }
@@ -317,34 +311,40 @@ const Invoices = () => {
       const compareId = leadId?._id || leadId?.id || leadId
       return lId === compareId || lId?.toString() === compareId?.toString()
     })
-    return lead ? (lead.customerName || lead.loanAccountNo || 'N/A') : 'N/A'
+    return lead ? (lead.customerName || lead.loanAccountNo || lead.leadId || 'N/A') : 'N/A'
   }
 
-  const getAssociatedForInvoice = (inv) => {
-    if (!inv) return 'N/A'
-    if (inv.agent && typeof inv.agent === 'object') {
-      if (inv.agent.managedByModel === 'RelationshipManager') return inv.agent.managedBy?.name || 'N/A'
-      if (inv.agent.managedByModel === 'Franchise') return inv.agent.managedBy?.name || inv.franchise?.name || 'N/A'
-    }
-    // try resolve agent id
-    const agentId = inv.agent?._id || inv.agent?.id || inv.agent
-    if (agentId) {
-      const agentObj = agents.find(a => (a._id || a.id) === agentId || (a._id || a.id)?.toString() === agentId?.toString())
-      if (agentObj) {
-        if (agentObj.managedByModel === 'RelationshipManager') return agentObj.managedBy?.name || 'N/A'
-        if (agentObj.managedByModel === 'Franchise') return agentObj.managedBy?.name || inv.franchise?.name || 'N/A'
+  const getAssociatedForInvoice = (invoice) => {
+    if (invoice.franchise) {
+      if (typeof invoice.franchise === 'object') {
+        return invoice.franchise.name || 'N/A'
       }
+      const franchise = franchises.find(f => {
+        const fId = f.id || f._id
+        return fId === invoice.franchise || fId?.toString() === invoice.franchise?.toString()
+      })
+      return franchise ? franchise.name : 'N/A'
     }
-    return inv.franchise?.name || 'N/A'
+    return 'N/A'
   }
+
   const isOverdue = (dueDate) => {
-    return new Date(dueDate) < new Date() && statusFilter !== 'paid'
+    if (!dueDate) return false
+    const due = new Date(dueDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    due.setHours(0, 0, 0, 0)
+    return due < today
   }
 
   const statusOptions = [
-    { value: 'all', label: 'All Status' },
-    { value: 'paid', label: 'Paid' },
+    { value: 'all', label: 'All Statuses' },
+    { value: 'draft', label: 'Draft' },
     { value: 'pending', label: 'Pending' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'escalated', label: 'Escalated' },
+    { value: 'paid', label: 'Paid' },
     { value: 'overdue', label: 'Overdue' },
   ]
 
@@ -389,77 +389,82 @@ const Invoices = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Invoices"
-          value={totalInvoices}
+          value={totalInvoices.toString()}
           icon={FileText}
           color="blue"
         />
         <StatCard
           title="Paid Invoices"
-          value={paidInvoices}
+          value={paidInvoices.toString()}
           icon={CheckCircle}
           color="green"
         />
         <StatCard
           title="Total Amount"
-          value={`₹${(totalAmount / 1000).toFixed(1)}K`}
-          icon={IndianRupeeIcon}
-          color="orange"
+          value={`₹${totalAmount.toLocaleString()}`}
+          icon={DollarSign}
+          color="purple"
         />
         <StatCard
           title="Paid Amount"
-          value={`₹${(paidAmount / 1000).toFixed(1)}K`}
-          icon={IndianRupeeIcon}
-          color="purple"
+          value={`₹${paidAmount.toLocaleString()}`}
+          icon={CheckCircle}
+          color="green"
         />
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <button type="button" onClick={() => setFiltersOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
-          <span className="flex items-center gap-2 font-medium text-gray-900">
-            <Filter className="w-5 h-5 text-gray-500" />
-            Filter options
-            {hasActiveFilters && <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">Active</span>}
-          </span>
-          {filtersOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
-        </button>
-        {filtersOpen && (
-          <div className="border-t border-gray-200 p-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="sm:col-span-2 lg:col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="text" placeholder="Invoice #, lead, agent..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
-                  {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Associated</label>
-                <select value={franchiseFilter} onChange={(e) => setFranchiseFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
-                  <option value="">All franchises</option>
-                  {franchises.map((f) => <option key={f._id || f.id} value={f._id || f.id}>{f.name || 'Unnamed'}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
-                <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
-                  <option value="">All agents</option>
-                  {agents.map((a) => <option key={a._id || a.id} value={a._id || a.id}>{a.name || a.email || 'Unnamed'}</option>)}
-                </select>
-              </div>
+      {/* Search and Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search by invoice number, loan account, agent..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              />
             </div>
-            {hasActiveFilters && (
-              <div className="flex items-center gap-2 pt-1">
-                <button type="button" onClick={clearInvoiceFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">Clear all filters</button>
-                <span className="text-sm text-gray-500">Showing {filteredInvoices.length} of {invoices.length} invoices</span>
-              </div>
-            )}
+            <button
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            >
+              <Filter size={18} />
+              Filters
+              {filtersOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
+          </div>
+        </div>
+        {filtersOpen && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                {statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Associated</label>
+              <select value={franchiseFilter} onChange={(e) => setFranchiseFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                <option value="">All franchises</option>
+                {franchises.map((f) => <option key={f._id || f.id} value={f._id || f.id}>{f.name || 'Unnamed'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
+              <select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
+                <option value="">All agents</option>
+                {agents.map((a) => <option key={a._id || a.id} value={a._id || a.id}>{a.name || a.email || 'Unnamed'}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2 pt-1">
+            <button type="button" onClick={clearInvoiceFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">Clear all filters</button>
+            <span className="text-sm text-gray-500">Showing {filteredInvoices.length} of {invoices.length} invoices</span>
           </div>
         )}
       </div>
@@ -793,4 +798,5 @@ const Invoices = () => {
   )
 }
 
-export default Invoices
+export default AccountantInvoices
+

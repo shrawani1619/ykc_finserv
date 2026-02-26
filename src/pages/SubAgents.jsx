@@ -22,7 +22,8 @@ const SubAgents = () => {
 
   const [userRole, setUserRole] = useState(authService.getUser()?.role)
   const isAgent = userRole === 'agent'
-  const canAccess = isAgent
+  const isAdmin = userRole === 'super_admin'
+  const canAccess = isAgent || isAdmin
 
   // Refresh user data on mount to ensure role is up-to-date
   useEffect(() => {
@@ -54,64 +55,24 @@ const SubAgents = () => {
     try {
       setLoading(true)
       
-      // Log current user role for debugging
-      const currentUser = authService.getUser()
-      console.log('Current user from localStorage:', currentUser)
-      console.log('User role:', currentUser?.role)
-      
       const response = await api.subAgents.getAll()
       const subAgentsData = response.data || response || []
       setSubAgents(Array.isArray(subAgentsData) ? subAgentsData : [])
     } catch (error) {
       console.error('Error fetching sub-agents:', error)
-      console.error('Error message:', error.message)
       setSubAgents([])
       
-      // If 403 error, try to refresh user data from server
-      if (error.message && (error.message.includes('Insufficient permissions') || error.message.includes('403'))) {
-        try {
-          console.log('Attempting to refresh user data from server...')
-          const currentUserResponse = await api.auth.getCurrentUser()
-          const userData = currentUserResponse?.data || currentUserResponse
-          console.log('User data from server:', userData)
-          
-          if (userData) {
-            authService.setUser(userData)
-            const updatedRole = userData.role
-            console.log('Updated role from server:', updatedRole)
-            
-            if (updatedRole !== 'agent') {
-              toast.error(
-                'Access Denied', 
-                `Your account role (${updatedRole}) does not have permission to access sub-agents. Only agents can access this page.`
-              )
-              return
-            } else {
-              // Role is correct, retry the request
-              console.log('Role is correct, retrying request...')
-              const retryResponse = await api.subAgents.getAll()
-              const retryData = retryResponse.data || retryResponse || []
-              setSubAgents(Array.isArray(retryData) ? retryData : [])
-              return
-            }
-          }
-        } catch (refreshError) {
-          console.error('Error refreshing user data:', refreshError)
-          // Show the original error message which should contain role info
-          const errorMsg = error.message || 'Failed to fetch sub-agents'
-          const roleInfo = errorMsg.includes('Your role:') ? errorMsg : `Your current role: ${currentUser?.role || 'unknown'}`
-          toast.error('Access Denied', roleInfo)
-          return
-        }
+      // If error was already shown by apiRequest (has _toastShown flag), don't show again
+      if (error._toastShown) {
+        // Error toast was already shown by the global apiRequest handler
+        // Only log it, don't show another toast
+        return
       }
       
-      // Show error with role information if available
-      const errorMsg = error.message || 'Failed to fetch sub-agents'
-      const currentUser = authService.getUser()
-      if (errorMsg.includes('Your role:')) {
-        toast.error('Access Denied', errorMsg)
-      } else {
-        toast.error('Error', `${errorMsg}. Your role: ${currentUser?.role || 'unknown'}`)
+      // Only show error if it's a specific sub-agents error (not a general permission error)
+      // The global apiRequest already handles 403 errors with proper toast
+      if (error.message && !error.message.includes('Insufficient permissions')) {
+        toast.error('Error', error.message || 'Failed to fetch sub-agents')
       }
     } finally {
       setLoading(false)
@@ -185,7 +146,6 @@ const SubAgents = () => {
           name: rest.name,
           email: rest.email,
           mobile: phone.trim(),
-          password: rest.password || 'SubAgent@123',
           status: rest.status || 'active',
           kyc: rest.kyc || undefined,
           bankDetails: rest.bankDetails || undefined,
@@ -243,7 +203,7 @@ const SubAgents = () => {
       <div className="space-y-6 w-full max-w-full overflow-x-hidden">
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
           <p className="text-red-800 font-medium">
-            Access Denied. Only agents can access this page.
+            Access Denied. Only agents and admins can access this page.
             {userRole && <span className="block mt-2 text-sm">Your current role: {userRole}</span>}
           </p>
         </div>
@@ -432,15 +392,16 @@ const SubAgents = () => {
         size="md"
       >
         {selectedSubAgent && (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Basic Info */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-500">Full Name</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.name}</p>
+                <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.name || 'N/A'}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Email</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.email}</p>
+                <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.email || 'N/A'}</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-500">Phone</label>
@@ -453,6 +414,54 @@ const SubAgents = () => {
                 </div>
               </div>
             </div>
+
+            {/* KYC Details */}
+            <div className="pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">KYC Details</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500">PAN</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.kyc?.pan || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Aadhaar</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.kyc?.aadhaar || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">GST</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.kyc?.gst || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Bank Details */}
+            <div className="pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Bank Details</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Account Holder Name</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.bankDetails?.accountHolderName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Account Number</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.bankDetails?.accountNumber || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Bank Name</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.bankDetails?.bankName || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Branch</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.bankDetails?.branch || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500">IFSC</label>
+                  <p className="mt-1 text-sm text-gray-900">{selectedSubAgent.bankDetails?.ifsc || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
             <div className="pt-4 border-t border-gray-200">
               <button
                 onClick={() => {
@@ -489,7 +498,6 @@ const SubAgentForm = ({ subAgent, onSave, onClose, isSaving = false }) => {
     name: subAgent?.name || '',
     email: subAgent?.email || '',
     phone: subAgent?.phone || subAgent?.mobile || '',
-    password: '',
     status: subAgent?.status || 'active',
     kyc: subAgent?.kyc || { pan: '', aadhaar: '', gst: '' },
     bankDetails: subAgent?.bankDetails || { accountHolderName: '', accountNumber: '', bankName: '', branch: '', ifsc: '' },
@@ -520,9 +528,7 @@ const SubAgentForm = ({ subAgent, onSave, onClose, isSaving = false }) => {
     if (!formData.email.trim()) newErrors.email = 'Email is required'
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid'
     if (!formData.phone.trim()) newErrors.phone = 'Phone is required'
-    if (!subAgent && (!formData.password || formData.password.length < 6)) {
-      newErrors.password = 'Password is required and must be at least 6 characters'
-    }
+
 
     setErrors(newErrors)
     if (Object.keys(newErrors).length === 0) {
@@ -596,21 +602,6 @@ const SubAgentForm = ({ subAgent, onSave, onClose, isSaving = false }) => {
         </select>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Password {subAgent ? '(Optional)' : <span className="text-red-500">*</span>}
-        </label>
-        <input
-          type="password"
-          name="password"
-          value={formData.password}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.password ? 'border-red-500' : 'border-gray-300'
-            }`}
-          placeholder="Enter password (min 6 characters)"
-        />
-        {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
-      </div>
 
       {/* KYC Fields */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

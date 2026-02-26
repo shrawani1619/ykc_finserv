@@ -641,6 +641,16 @@ const AccountantLeads = () => {
                                             <span>Agent</span>
                                         </div>
                                     </th>
+                                    <th className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <span>SubAgent</span>
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <span>Associated</span>
+                                        </div>
+                                    </th>
                                     <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('bank.name')}>
                                         <div className="flex items-center gap-2">
                                             <span>Bank</span>
@@ -718,14 +728,23 @@ const AccountantLeads = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                                                     <div className="flex items-center gap-1">
                                                         <Percent size={12} />
-                                                        {lead.commissionPercentage || 0}%
+                                                        {(() => {
+                                                        const percentage = lead.commissionPercentage || lead.agentCommissionPercentage || 0;
+                                                        return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
+                                                    })()}%
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
-                                                    {formatCurrency(lead.commissionAmount || 0)}
+                                                    {formatCurrency(lead.commissionAmount || lead.agentCommissionAmount || 0)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                                     {lead.agentName || lead.agent?.name || 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {lead.subAgentName || lead.subAgent?.name || 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {lead.associated?.name || 'N/A'}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                                     {lead.bank?.name || lead.bankName || 'N/A'}
@@ -734,8 +753,8 @@ const AccountantLeads = () => {
                                                     {new Date(lead.createdAt).toLocaleDateString()}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-[120px] truncate">
-                                                    <span title={lead.remark || 'N/A'}>
-                                                        {lead.remark || 'N/A'}
+                                                    <span title={lead.remarks || lead.remark || 'N/A'}>
+                                                        {lead.remarks || lead.remark || 'N/A'}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -750,45 +769,131 @@ const AccountantLeads = () => {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    {lead.invoice || lead.isInvoiceGenerated ? (
-                                                        <span className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
-                                                            <CheckCircle2 size={14} />
-                                                            Generated
-                                                        </span>
-                                                    ) : (
-                                                        <button
-                                                            onClick={async (e) => {
-                                                                e.stopPropagation();
-                                                                try {
-                                                                    // Check if lead is in a status that allows invoice generation
-                                                                    const allowedStatuses = ['sanctioned', 'partial_disbursed', 'disbursed', 'completed'];
-                                                                    if (!allowedStatuses.includes(lead.status)) {
-                                                                        toast.error('Error', 'Invoice can only be generated for approved/disbursed leads');
-                                                                        return;
-                                                                    }
-
-                                                                    // Check if lead has commission amount
-                                                                    const commissionAmount = lead.commissionAmount || 0;
-                                                                    if (commissionAmount <= 0) {
-                                                                        toast.error('Error', 'Cannot generate invoice. Commission amount is zero or not set.');
-                                                                        return;
-                                                                    }
-
-                                                                    await api.invoices.generateFromLead(lead._id);
-                                                                    toast.success('Success', 'Invoice generated successfully');
-                                                                    // Refresh leads to update the UI
-                                                                    await fetchLeads();
-                                                                } catch (error) {
-                                                                    console.error('Error generating invoice:', error);
-                                                                    toast.error('Error', error.message || 'Failed to generate invoice');
+                                                    {(() => {
+                                                        // For disbursed status: Check if agent invoice exists
+                                                        if (lead.status === 'disbursed') {
+                                                            // Check if lead has subAgent
+                                                            const hasSubAgent = lead.subAgent || lead.subAgentName;
+                                                            const hasBothInvoices = lead.hasAgentInvoice && lead.hasSubAgentInvoice;
+                                                            const hasAnyInvoice = lead.hasAgentInvoice || lead.hasSubAgentInvoice;
+                                                            
+                                                            if (hasAnyInvoice) {
+                                                                if (hasSubAgent && hasBothInvoices) {
+                                                                    return (
+                                                                        <span className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
+                                                                            <CheckCircle2 size={14} />
+                                                                            Both Generated
+                                                                        </span>
+                                                                    );
+                                                                } else if (hasSubAgent && !hasBothInvoices) {
+                                                                    return (
+                                                                        <span className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-xs font-semibold">
+                                                                            <AlertCircle size={14} />
+                                                                            Partial
+                                                                        </span>
+                                                                    );
+                                                                } else {
+                                                                    return (
+                                                                        <span className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
+                                                                            <CheckCircle2 size={14} />
+                                                                            Generated
+                                                                        </span>
+                                                                    );
                                                                 }
-                                                            }}
-                                                            className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-semibold hover:bg-primary-700 transition-colors shadow-sm hover:shadow-md"
-                                                        >
-                                                            <FileText size={14} />
-                                                            Generate
-                                                        </button>
-                                                    )}
+                                                            } else {
+                                                                return (
+                                                                    <button
+                                                                        onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            try {
+                                                                                // Check if agent commission percentage is set
+                                                                                const agentCommissionPercentage = lead.agentCommissionPercentage || 0;
+                                                                                if (agentCommissionPercentage <= 0) {
+                                                                                    toast.error('Error', 'Cannot generate invoice. Agent commission percentage is not set or is zero.');
+                                                                                    return;
+                                                                                }
+
+                                                                                // If subAgent exists, check subAgent commission percentage
+                                                                                if (hasSubAgent) {
+                                                                                    const subAgentCommissionPercentage = lead.subAgentCommissionPercentage || 0;
+                                                                                    if (subAgentCommissionPercentage <= 0) {
+                                                                                        toast.error('Error', 'Cannot generate split invoices. Sub-agent commission percentage is not set or is zero.');
+                                                                                        return;
+                                                                                    }
+                                                                                }
+
+                                                                                const response = await api.invoices.generateFromLead(lead._id);
+                                                                                
+                                                                                // Check if split invoices were generated
+                                                                                if (response.data?.isSplit) {
+                                                                                    toast.success('Success', 'Split invoices generated successfully (Agent and SubAgent)');
+                                                                                } else {
+                                                                                    toast.success('Success', 'Agent invoice generated successfully');
+                                                                                }
+                                                                                
+                                                                                // Refresh leads to update the UI
+                                                                                await fetchLeads();
+                                                                            } catch (error) {
+                                                                                console.error('Error generating invoice:', error);
+                                                                                toast.error('Error', error.message || 'Failed to generate invoice');
+                                                                            }
+                                                                        }}
+                                                                        className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-semibold hover:bg-primary-700 transition-colors shadow-sm hover:shadow-md"
+                                                                    >
+                                                                        <FileText size={14} />
+                                                                        {hasSubAgent ? 'Generate Split' : 'Generate'}
+                                                                    </button>
+                                                                );
+                                                            }
+                                                        }
+                                                        
+                                                        // For completed status: Check if franchise invoice exists
+                                                        if (lead.status === 'completed') {
+                                                            if (lead.hasFranchiseInvoice) {
+                                                                return (
+                                                                    <span className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
+                                                                        <CheckCircle2 size={14} />
+                                                                        Generated
+                                                                    </span>
+                                                                );
+                                                            } else {
+                                                                return (
+                                                                    <button
+                                                                        onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            try {
+                                                                                // Check if loan amount is available
+                                                                                const loanAmount = lead.loanAmount || 0;
+                                                                                if (loanAmount <= 0) {
+                                                                                    toast.error('Error', 'Cannot generate franchise invoice. Loan amount is not set or is zero.');
+                                                                                    return;
+                                                                                }
+
+                                                                                await api.invoices.generateFromLead(lead._id);
+                                                                                toast.success('Success', 'Franchise invoice generated successfully');
+                                                                                // Refresh leads to update the UI
+                                                                                await fetchLeads();
+                                                                            } catch (error) {
+                                                                                console.error('Error generating invoice:', error);
+                                                                                toast.error('Error', error.message || 'Failed to generate invoice');
+                                                                            }
+                                                                        }}
+                                                                        className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-xs font-semibold hover:bg-primary-700 transition-colors shadow-sm hover:shadow-md"
+                                                                    >
+                                                                        <FileText size={14} />
+                                                                        Generate
+                                                                    </button>
+                                                                );
+                                                            }
+                                                        }
+                                                        
+                                                        // For other statuses: Don't show invoice generation
+                                                        return (
+                                                            <span className="text-xs text-gray-400">
+                                                                N/A
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
@@ -843,7 +948,7 @@ const AccountantLeads = () => {
                                             {/* EXPANDED ROW */}
                                             {isExpanded && (
                                                 <tr className="bg-gray-50/50 animate-in slide-in-from-top-2 duration-300">
-                                                    <td colSpan="20" className="p-0 border-b border-gray-100">
+                                                    <td colSpan="21" className="p-0 border-b border-gray-100">
                                                         <div className="p-6 border-b border-gray-100 transition-all duration-300">
                                                             <LeadExpandedDetails 
                                                                 lead={lead} 
@@ -1079,7 +1184,7 @@ const AccountantLeads = () => {
                                         </div>
                                         <div className="col-span-2">
                                             <label className="text-xs font-semibold text-gray-500">Remark</label>
-                                            <p className="text-sm font-medium text-gray-900 mt-1">{viewLeadData.remark}</p>
+                                            <p className="text-sm font-medium text-gray-900 mt-1">{viewLeadData.remarks || viewLeadData.remark || 'N/A'}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1137,3 +1242,5 @@ const AccountantLeads = () => {
 };
 
 export default AccountantLeads;
+
+
