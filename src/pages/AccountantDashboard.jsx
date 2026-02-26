@@ -18,7 +18,6 @@ import {
     AlertCircle,
     Settings,
     BarChart3,
-    CreditCard,
     Briefcase
 } from 'lucide-react';
 import {
@@ -84,7 +83,6 @@ const AccountantDashboard = () => {
         { name: 'Overview', icon: LayoutDashboard },
         { name: 'Leads', icon: Users },
         { name: 'Invoices', icon: FileText, badge: 3 },
-        { name: 'Payouts', icon: CreditCard },
         { name: 'Agents', icon: Briefcase },
         { name: 'Reports', icon: BarChart3 },
         { name: 'Settings', icon: Settings },

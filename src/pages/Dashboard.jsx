@@ -29,7 +29,6 @@ const Dashboard = () => {
     recentAgents: [],
     recentFranchises: [],
     recentInvoices: [],
-    recentPayouts: [],
   })
   const [agentData, setAgentData] = useState({
     completedLeadsWithoutInvoices: [],
@@ -130,7 +129,6 @@ const Dashboard = () => {
           recentAgents: Array.isArray(data.recentAgents) ? data.recentAgents : [],
           recentFranchises: Array.isArray(data.recentFranchises) ? data.recentFranchises : [],
           recentInvoices: Array.isArray(data.recentInvoices) ? data.recentInvoices : [],
-          recentPayouts: Array.isArray(data.recentPayouts) ? data.recentPayouts : [],
           relationshipManagers: Array.isArray(data.relationshipManagers) ? data.relationshipManagers : [],
         })
       }
@@ -636,34 +634,6 @@ const Dashboard = () => {
                     ))
                   ) : (
                     <p className="text-sm text-gray-500 text-center py-4">No recent invoices</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Recent Payouts */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 lg:col-span-2">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">Recent Payouts</h2>
-                  <a href="/payouts" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {relatedLists.recentPayouts.length > 0 ? (
-                    relatedLists.recentPayouts.map((payout) => (
-                      <div key={payout.id || payout._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{payout.payoutNumber || 'N/A'}</p>
-                          <p className="text-xs text-gray-600">
-                            {payout.agent?.name || 'N/A'} • {payout.franchise?.name || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-gray-900">₹{(payout.netPayable || 0).toLocaleString()}</p>
-                          <p className="text-xs text-gray-500">{payout.status || 'N/A'}</p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4 col-span-2">No recent payouts</p>
                   )}
                 </div>
               </div>

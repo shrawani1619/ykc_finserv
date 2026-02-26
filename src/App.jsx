@@ -14,7 +14,6 @@ import Banks from './pages/Banks'
 import Franchises from './pages/Franchises'
 import RelationshipManagers from './pages/RelationshipManagers'
 import Invoices from './pages/Invoices'
-import Payouts from './pages/Payouts'
 import Settings from './pages/Settings'
 import Help from './pages/Help'
 import RegionalManagers from './pages/RegionalManagers'
@@ -77,7 +76,6 @@ function App() {
           <Route path="history" element={<History />} />
           <Route path="franchise-commission" element={<FranchiseCommission />} />
           <Route path="invoices" element={<Invoices />} />
-          <Route path="payouts" element={<Payouts />} />
           <Route path="settings" element={<Settings />} />
           <Route path="help" element={<Help />} />
         </Route>

@@ -20,6 +20,7 @@ const AccountantManagers = () => {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
     const [selectedAM, setSelectedAM] = useState(null)
     const [isSaving, setIsSaving] = useState(false)
+    const [loadingDetails, setLoadingDetails] = useState(false)
     const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' })
     const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, am: null })
 
@@ -102,6 +103,32 @@ const AccountantManagers = () => {
             toast.error('Error', error.message || 'Failed to save accountant manager')
         } finally {
             setIsSaving(false)
+        }
+    }
+
+    const handleView = async (am) => {
+        try {
+            setLoadingDetails(true)
+            // Fetch full details including KYC and bank details
+            const amId = am._id || am.id
+            if (!amId) {
+                toast.error('Error', 'Accountant Manager ID is missing')
+                setLoadingDetails(false)
+                return
+            }
+            
+            const response = await api.accountantManagers.getById(amId)
+            const fullDetails = response.data || response
+            setSelectedAM(fullDetails)
+            setIsDetailModalOpen(true)
+        } catch (error) {
+            console.error('Error fetching accountant manager details:', error)
+            toast.error('Error', error.message || 'Failed to fetch accountant manager details')
+            // Fallback to using the list data if fetch fails
+            setSelectedAM(am)
+            setIsDetailModalOpen(true)
+        } finally {
+            setLoadingDetails(false)
         }
     }
 
@@ -220,7 +247,7 @@ const AccountantManagers = () => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => { setSelectedAM(am); setIsDetailModalOpen(true) }} className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-md transition-colors" title="View Details"><Eye className="w-4 h-4" /></button>
+                                                <button onClick={() => handleView(am)} className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-gray-100 rounded-md transition-colors" title="View Details"><Eye className="w-4 h-4" /></button>
                                                 <button onClick={() => { setSelectedAM(am); setIsEditModalOpen(true) }} className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-gray-100 rounded-md transition-colors" title="Edit"><Edit className="w-4 h-4" /></button>
                                                 <button onClick={() => setConfirmDelete({ isOpen: true, am })} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded-md transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
                                             </div>
@@ -243,7 +270,11 @@ const AccountantManagers = () => {
             </Modal>
 
             <Modal isOpen={isDetailModalOpen} onClose={() => { setIsDetailModalOpen(false); setSelectedAM(null) }} title="Accountant Manager Details" size="md">
-                {selectedAM && (
+                {loadingDetails ? (
+                    <div className="flex items-center justify-center py-8">
+                        <div className="text-gray-500">Loading details...</div>
+                    </div>
+                ) : selectedAM ? (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
@@ -275,12 +306,24 @@ const AccountantManagers = () => {
                                     <label className="text-xs font-semibold text-gray-500 uppercase">Aadhaar Number</label>
                                     <p className="text-sm text-gray-900">{selectedAM.kyc?.aadhaar || 'N/A'}</p>
                                 </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">GST Number</label>
+                                    <p className="text-sm text-gray-900">{selectedAM.kyc?.gst || 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">KYC Verified</label>
+                                    <p className="text-sm text-gray-900">{selectedAM.kyc?.verified ? 'Yes' : 'No'}</p>
+                                </div>
                             </div>
                         </div>
 
                         <div className="pt-4 border-t">
                             <h4 className="text-sm font-semibold text-gray-900 mb-3">Bank Details</h4>
                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Account Holder Name</label>
+                                    <p className="text-sm text-gray-900">{selectedAM.bankDetails?.accountHolderName || 'N/A'}</p>
+                                </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-semibold text-gray-500 uppercase">Bank Name</label>
                                     <p className="text-sm text-gray-900">{selectedAM.bankDetails?.bankName || 'N/A'}</p>
@@ -305,7 +348,7 @@ const AccountantManagers = () => {
                             <button onClick={() => setIsDetailModalOpen(false)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium transition-colors">Close</button>
                         </div>
                     </div>
-                )}
+                ) : null}
             </Modal>
 
             <ConfirmModal

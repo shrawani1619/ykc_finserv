@@ -57,7 +57,8 @@ const Banks = () => {
   const totalBanks = banks.length
   const activeBanks = banks.filter(b => b.status === 'active').length
   const totalLoans = leads.length
-  const activeLoans = leads.filter(l => ['applied', 'processing', 'logged', 'sanctioned'].includes(l.status)).length
+  // Active loans are those that are not completed or rejected
+  const activeLoans = leads.filter(l => ['logged', 'sanctioned', 'partial_disbursed', 'disbursed'].includes(l.status)).length
 
   // Get bank loan statistics
   const getBankLoanStats = (bankId) => {
@@ -72,7 +73,8 @@ const Banks = () => {
 
     return {
       total: bankLeads.length,
-      active: bankLeads.filter(l => ['logged', 'sanctioned'].includes(l.status)).length,
+      // Active loans are those that are not completed or rejected
+      active: bankLeads.filter(l => ['logged', 'sanctioned', 'partial_disbursed', 'disbursed'].includes(l.status)).length,
       completed: bankLeads.filter(l => l.status === 'completed').length,
     }
   }

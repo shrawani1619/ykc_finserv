@@ -63,6 +63,18 @@ export const generateInvoicePDF = (invoiceData, companySettings = {}, robotoFont
   } else {
     receiver = invoiceData.franchise;
   }
+
+  // Determine if receiver is a "normal" (non-GST) user
+  // For agents/sub-agents we look at agent.agentType
+  // For franchises we look at franchise.franchiseType
+  let isNormalGSTUser = false;
+  if (invoiceData.invoiceType === 'agent' || invoiceData.invoiceType === 'sub_agent') {
+    const agent = invoiceData.agent || receiver;
+    isNormalGSTUser = agent?.agentType === 'normal';
+  } else if (invoiceData.invoiceType === 'franchise') {
+    const franchise = invoiceData.franchise || receiver;
+    isNormalGSTUser = franchise?.franchiseType === 'normal';
+  }
   
   // Debug logging
   console.log('🔍 Invoice PDF - Receiver Details:', {
@@ -252,10 +264,19 @@ export const generateInvoicePDF = (invoiceData, companySettings = {}, robotoFont
     amountRight: 115,
     rateRight: 130,
     taxableRight: 150,
+    // GST column will only be used for GST-registered users
     gstRight: 165,
     tdsRight: 180,
     grossRight: pageWidth - 15,
   };
+
+  // If the receiver is a "normal" user, we hide the GST column visually
+  // and shift the remaining numeric columns slightly for better spacing.
+  if (isNormalGSTUser) {
+    // Re-use the previous GST column position for TDS and keep Gross at the end
+    col.tdsRight = col.gstRight;
+    col.grossRight = pageWidth - 15;
+  }
 
   // Table headers with proper spacing (shorter headers to fit)
   addText('Sr', col.sr, yPosition, { fontSize: 8, fontStyle: 'bold' });
@@ -265,7 +286,10 @@ export const generateInvoicePDF = (invoiceData, companySettings = {}, robotoFont
   addText('Amount', col.amountRight, yPosition, { fontSize: 8, fontStyle: 'bold' , align: 'right' });
   addText('Rate%', col.rateRight, yPosition, { fontSize: 8, fontStyle: 'bold' , align: 'right'});
   addText('Taxable', col.taxableRight, yPosition, { fontSize: 8, fontStyle: 'bold' , align: 'right' });
-  addText('GST', col.gstRight, yPosition, { fontSize: 8, fontStyle: 'bold' , align: 'right' });
+  // Only show GST column in header for GST-registered users
+  if (!isNormalGSTUser) {
+    addText('GST', col.gstRight, yPosition, { fontSize: 8, fontStyle: 'bold' , align: 'right' });
+  }
   addText('TDS', col.tdsRight, yPosition, { fontSize: 8, fontStyle: 'bold' , align: 'right'});
   addText('Gross', col.grossRight, yPosition, { fontSize: 8, fontStyle: 'bold' , align: 'right'});
 
@@ -299,11 +323,13 @@ export const generateInvoicePDF = (invoiceData, companySettings = {}, robotoFont
   const taxableText = '₹' + taxableFormatted;
   addText(taxableText, col.taxableRight , yPosition, { fontSize: 8, align: 'right' });
   
-  // GST - right aligned (clean formatting)
-  const gstValue = Math.max(0, gstAmount);
-  const gstFormatted = gstValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const gstText = '₹' + gstFormatted;
-  addText(gstText, col.gstRight, yPosition, { fontSize: 8, align: 'right' });
+  // GST - right aligned (clean formatting) - only if not a "normal" user
+  if (!isNormalGSTUser) {
+    const gstValue = Math.max(0, gstAmount);
+    const gstFormatted = gstValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const gstText = '₹' + gstFormatted;
+    addText(gstText, col.gstRight, yPosition, { fontSize: 8, align: 'right' });
+  }
   
   // TDS - right aligned (clean formatting)
   const tdsValue = Math.max(0, tdsAmount);
