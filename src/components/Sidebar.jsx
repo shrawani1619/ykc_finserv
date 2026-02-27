@@ -48,7 +48,8 @@ const Sidebar = ({ onMinimizeChange }) => {
     { icon: UserCheck, label: 'Accountant Managers', path: '/accountant-managers', roles: ['super_admin'] },
     { icon: FileText, label: 'Invoices', path: '/invoices', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent', 'accounts_manager'] },
     { icon: FileText, label: 'Lead Forms', path: '/lead-forms', roles: ['super_admin', 'regional_manager'] },
-    { icon: Image, label: 'Banners', path: '/banners', roles: ['super_admin'] },
+    // Banners: visible to all roles, but only super_admin can edit/delete (enforced in UI + backend)
+    { icon: Image, label: 'Banners', path: '/banners', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent', 'accounts_manager'] },
     { icon: Receipt, label: 'Form 16 / TDS', path: '/form16', roles: ['super_admin', 'accounts_manager', 'agent'] },
     { icon: Ticket, label: 'Service Requests', path: '/tickets', roles: ['super_admin', 'regional_manager', 'relationship_manager', 'franchise', 'agent'] },
     { icon: History, label: 'History', path: '/history', roles: ['super_admin', 'accounts_manager'] },

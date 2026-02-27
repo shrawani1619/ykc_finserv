@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Image as ImageIcon, TrendingUp, FileText, ChevronDown, ChevronUp, FileDown } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Image as ImageIcon, TrendingUp, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import api from '../services/api'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
@@ -7,7 +7,7 @@ import BannerForm from '../components/BannerForm'
 import StatCard from '../components/StatCard'
 import ConfirmModal from '../components/ConfirmModal'
 import { toast } from '../services/toastService'
-import { exportToExcel } from '../utils/exportExcel'
+import { authService } from '../services/auth.service'
 
 const Banners = () => {
   const [banners, setBanners] = useState([])
@@ -21,6 +21,9 @@ const Banners = () => {
   const [selectedBanner, setSelectedBanner] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, banner: null })
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+
+  const userRole = authService.getUser()?.role || ''
+  const isAdmin = userRole === 'super_admin'
 
   useEffect(() => {
     fetchBanners()
@@ -191,30 +194,15 @@ const Banners = () => {
           <p className="text-sm text-gray-600 mt-1">Manage banner images</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              const rows = sortedBanners.map((banner) => ({
-                Name: banner.name || 'N/A',
-                Status: banner.status || 'N/A',
-                'Created At': banner.createdAt ? new Date(banner.createdAt).toLocaleDateString() : 'N/A',
-              }))
-              exportToExcel(rows, `banners_export_${Date.now()}`, 'Banners')
-              toast.success('Export', `Exported ${rows.length} banners to Excel`)
-            }}
-            disabled={sortedBanners.length === 0}
-            title="Export currently filtered data to Excel"
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FileDown className="w-5 h-5" />
-            <span>Export to Excel</span>
-          </button>
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create New Banner</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Create New Banner</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -368,20 +356,24 @@ const Banners = () => {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => handleEdit(banner)}
-                            className="text-gray-600 hover:text-gray-900 p-1"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(banner)}
-                            className="text-red-600 hover:text-red-900 p-1"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                onClick={() => handleEdit(banner)}
+                                className="text-gray-600 hover:text-gray-900 p-1"
+                                title="Edit"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(banner)}
+                                className="text-red-600 hover:text-red-900 p-1"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -401,37 +393,41 @@ const Banners = () => {
         )}
       </div>
 
-      {/* Create Modal */}
-      <Modal
-        isOpen={isCreateModalOpen}
-        onClose={() => {
-          setIsCreateModalOpen(false)
-          fetchBanners() // Refresh list when modal closes
-        }}
-        title="Create New Banner"
-      >
-        <BannerForm onSave={handleSave} onClose={() => {
-          setIsCreateModalOpen(false)
-          fetchBanners() // Refresh list when closing
-        }} />
-      </Modal>
+      {/* Create Modal (admin only) */}
+      {isAdmin && (
+        <Modal
+          isOpen={isCreateModalOpen}
+          onClose={() => {
+            setIsCreateModalOpen(false)
+            fetchBanners() // Refresh list when modal closes
+          }}
+          title="Create New Banner"
+        >
+          <BannerForm onSave={handleSave} onClose={() => {
+            setIsCreateModalOpen(false)
+            fetchBanners() // Refresh list when closing
+          }} />
+        </Modal>
+      )}
 
-      {/* Edit Modal */}
-      <Modal
-        isOpen={isEditModalOpen}
-        onClose={() => {
-          setIsEditModalOpen(false)
-          setSelectedBanner(null)
-          fetchBanners() // Refresh list when modal closes
-        }}
-        title="Edit Banner"
-      >
-        <BannerForm banner={selectedBanner} onSave={handleSave} onClose={() => {
-          setIsEditModalOpen(false)
-          setSelectedBanner(null)
-          fetchBanners() // Refresh list when closing
-        }} />
-      </Modal>
+      {/* Edit Modal (admin only) */}
+      {isAdmin && (
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false)
+            setSelectedBanner(null)
+            fetchBanners() // Refresh list when modal closes
+          }}
+          title="Edit Banner"
+        >
+          <BannerForm banner={selectedBanner} onSave={handleSave} onClose={() => {
+            setIsEditModalOpen(false)
+            setSelectedBanner(null)
+            fetchBanners() // Refresh list when closing
+          }} />
+        </Modal>
+      )}
 
       {/* Detail Modal */}
       <Modal
@@ -493,17 +489,19 @@ const Banners = () => {
         )}
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmDelete.isOpen}
-        onClose={() => setConfirmDelete({ isOpen: false, banner: null })}
-        onConfirm={handleDeleteConfirm}
-        title="Delete Banner"
-        message={`Are you sure you want to delete banner "${confirmDelete.banner?.name || 'this banner'}"? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        type="danger"
-      />
+      {/* Delete Confirmation Modal (admin only) */}
+      {isAdmin && (
+        <ConfirmModal
+          isOpen={confirmDelete.isOpen}
+          onClose={() => setConfirmDelete({ isOpen: false, banner: null })}
+          onConfirm={handleDeleteConfirm}
+          title="Delete Banner"
+          message={`Are you sure you want to delete banner "${confirmDelete.banner?.name || 'this banner'}"? This action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          type="danger"
+        />
+      )}
     </div>
   )
 }

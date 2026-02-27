@@ -250,8 +250,8 @@ const Invoices = () => {
         toast.error('Error', 'Net payable amount is required')
         return
       }
-      // Validate status enum
-      const validStatuses = ['draft', 'pending', 'approved', 'rejected', 'escalated', 'paid']
+      // Validate status enum (including GST Paid status)
+      const validStatuses = ['draft', 'pending', 'approved', 'rejected', 'escalated', 'gst_paid', 'paid']
       if (!validStatuses.includes(formData.status)) {
         toast.error('Error', `Invalid status. Must be one of: ${validStatuses.join(', ')}`)
         return
@@ -343,8 +343,9 @@ const Invoices = () => {
 
   const statusOptions = [
     { value: 'all', label: 'All Status' },
-    { value: 'paid', label: 'Paid' },
     { value: 'pending', label: 'Pending' },
+    { value: 'gst_paid', label: 'GST Paid' },
+    { value: 'paid', label: 'Paid' },
     { value: 'overdue', label: 'Overdue' },
   ]
 
@@ -642,6 +643,7 @@ const Invoices = () => {
                             title="Change Status"
                           >
                             <option value="pending">Pending</option>
+                            <option value="gst_paid">GST Paid</option>
                             <option value="paid">Paid</option>
                           </select>
                         )}
