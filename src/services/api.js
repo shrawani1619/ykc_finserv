@@ -361,14 +361,51 @@ export const api = {
     process: () => apiRequest('/payouts/process', { method: 'POST' }),
     generateCsv: (id) => apiRequest(`/payouts/${id}/generate-csv`, { method: 'POST' }),
     confirmPayment: (id) => apiRequest(`/payouts/${id}/confirm`, { method: 'POST' }),
-    create: (data) => apiRequest('/payouts', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-    update: (id, data) => apiRequest(`/payouts/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+    create: (data) => {
+      // If data is FormData, send it directly (for file uploads)
+      if (data instanceof FormData) {
+        return fetch(`${API_BASE_URL}/payouts`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authService.getToken()}`,
+          },
+          body: data,
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || data.message || 'Request failed');
+          }
+          return data;
+        });
+      }
+      // Otherwise, send as JSON
+      return apiRequest('/payouts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    update: (id, data) => {
+      // If data is FormData, send it directly (for file uploads)
+      if (data instanceof FormData) {
+        return fetch(`${API_BASE_URL}/payouts/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${authService.getToken()}`,
+          },
+          body: data,
+        }).then(async (res) => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || data.message || 'Request failed');
+          }
+          return data;
+        });
+      }
+      return apiRequest(`/payouts/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
     delete: (id) => apiRequest(`/payouts/${id}`, { method: 'DELETE' }),
   },
 

@@ -25,6 +25,7 @@ import Form16 from './pages/Form16'
 import Tickets from './pages/Tickets'
 import SubAgents from './pages/SubAgents'
 import FranchiseCommission from './pages/FranchiseCommission'
+import Payouts from './pages/Payouts'
 
 function App() {
   const [notifications, setNotifications] = useState([])
@@ -76,6 +77,7 @@ function App() {
           <Route path="history" element={<History />} />
           <Route path="franchise-commission" element={<FranchiseCommission />} />
           <Route path="invoices" element={<Invoices />} />
+          <Route path="payouts" element={<Payouts />} />
           <Route path="settings" element={<Settings />} />
           <Route path="help" element={<Help />} />
         </Route>
