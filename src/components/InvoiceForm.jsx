@@ -166,15 +166,9 @@ const InvoiceForm = ({ invoice, onSave, onClose }) => {
     }
   }, [formData.leadId, leads])
 
-  // Calculate net payable when commission amount or TDS percentage changes
-  useEffect(() => {
-    if (formData.commissionAmount && formData.tdsPercentage) {
-      const commissionAmount = parseFloat(formData.commissionAmount) || 0
-      const tdsAmount = (commissionAmount * formData.tdsPercentage) / 100
-      const netPayable = commissionAmount - tdsAmount
-      // Store calculated values (will be sent in handleSubmit)
-    }
-  }, [formData.commissionAmount, formData.tdsPercentage])
+  // Formula: Taxable = commission; GST = 18% of Taxable; TDS = 2% of Taxable; Gross = Taxable + GST - TDS
+  const GST_RATE = 18
+  const TDS_RATE = 2
 
   const validate = () => {
     const newErrors = {}
@@ -214,10 +208,13 @@ const InvoiceForm = ({ invoice, onSave, onClose }) => {
       return
     }
 
-    const commissionAmount = parseFloat(formData.commissionAmount)
-    const tdsAmount = (commissionAmount * formData.tdsPercentage) / 100
-    const netPayable = commissionAmount - tdsAmount
-    
+    const taxable = parseFloat(formData.commissionAmount) // Commission (Taxable) = as entered / or Loan Amount × Rate%
+    const gstAmount = (taxable * GST_RATE) / 100 // GST = 18% of Taxable
+    const tdsAmount = (taxable * formData.tdsPercentage) / 100 // TDS = 2% of Taxable (or form %)
+    const netPayable = taxable + gstAmount - tdsAmount // Gross = Taxable + GST - TDS
+
+    const commissionAmount = taxable
+
     // For editing, use invoice data; for creating, use form data
     const leadData = invoice?.lead || selectedLead
     const leadId = invoice?.lead?._id || invoice?.lead?.id || invoice?.lead || formData.leadId
@@ -245,6 +242,7 @@ const InvoiceForm = ({ invoice, onSave, onClose }) => {
       agent: agentId,
       franchise: franchiseId,
       commissionAmount,
+      gstAmount,
       tdsAmount,
       tdsPercentage: formData.tdsPercentage,
       netPayable,
@@ -373,10 +371,12 @@ const InvoiceForm = ({ invoice, onSave, onClose }) => {
           max="100"
           step="0.1"
         />
-        {formData.commissionAmount && formData.tdsPercentage && (
-          <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-            <p><strong>TDS Amount:</strong> ₹{((parseFloat(formData.commissionAmount) || 0) * formData.tdsPercentage / 100).toLocaleString()}</p>
-            <p><strong>Net Payable:</strong> ₹{((parseFloat(formData.commissionAmount) || 0) * (1 - formData.tdsPercentage / 100)).toLocaleString()}</p>
+        {formData.commissionAmount && formData.tdsPercentage != null && (
+          <div className="mt-2 p-2 bg-blue-50 rounded text-sm space-y-1">
+            <p><strong>Taxable (Commission):</strong> ₹{(parseFloat(formData.commissionAmount) || 0).toLocaleString()}</p>
+            <p><strong>GST (18%):</strong> ₹{(((parseFloat(formData.commissionAmount) || 0) * GST_RATE / 100).toLocaleString())}</p>
+            <p><strong>TDS ({formData.tdsPercentage}%):</strong> ₹{((parseFloat(formData.commissionAmount) || 0) * formData.tdsPercentage / 100).toLocaleString()}</p>
+            <p><strong>Gross (Taxable + GST − TDS):</strong> ₹{((parseFloat(formData.commissionAmount) || 0) * (1 + GST_RATE / 100 - formData.tdsPercentage / 100)).toLocaleString()}</p>
           </div>
         )}
       </div>

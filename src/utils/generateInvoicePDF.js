@@ -117,10 +117,11 @@ export const generateInvoicePDF = (invoiceData, companySettings = {}, robotoFont
   const ifsc = bankDetails.ifsc || 'N/A';
   const branch = bankDetails.branch || 'N/A';
 
-  // Tax configuration
-  const cgstRate = companySettings.taxConfig?.cgstRate || 9;
-  const sgstRate = companySettings.taxConfig?.sgstRate || 9;
-  const tdsRate = invoiceData.tdsPercentage || companySettings.taxConfig?.defaultTdsRate || 2;
+  // Tax configuration: GST = 18% of Taxable, TDS = 2% of Taxable, Gross = Taxable + GST - TDS
+  const totalGstRatePct = 18; // 18% GST on taxable
+  const cgstRate = companySettings.taxConfig?.cgstRate ?? 9;
+  const sgstRate = companySettings.taxConfig?.sgstRate ?? 9;
+  const tdsRate = invoiceData.tdsPercentage ?? companySettings.taxConfig?.defaultTdsRate ?? 2;
 
   // Lead information
   const lead = invoiceData.lead || {};
@@ -156,23 +157,20 @@ export const generateInvoicePDF = (invoiceData, companySettings = {}, robotoFont
     payoutRate = (commission / amountDisbursed) * 100;
   }
   
-  // Calculate GST: commission × (CGST + SGST) / 100
-  // Default: CGST 9% + SGST 9% = 18% total
-  let gstAmount = invoiceData.gstAmount || 0;
+  // GST = 18% of Taxable (commission)
+  let gstAmount = invoiceData.gstAmount ?? 0;
   if (gstAmount === 0 && commission > 0) {
-    const totalGstRate = cgstRate + sgstRate; // Should be 18% (9% + 9%)
-    gstAmount = (commission * totalGstRate) / 100;
+    gstAmount = (commission * totalGstRatePct) / 100;
   }
-  
-  // Calculate TDS: commission × TDS Rate / 100
-  // Default: 2% or 5% or 10% (configurable)
-  let tdsAmount = invoiceData.tdsAmount || 0;
+
+  // TDS = 2% of Taxable (or invoice tdsPercentage)
+  let tdsAmount = invoiceData.tdsAmount ?? 0;
   if (tdsAmount === 0 && commission > 0) {
     tdsAmount = (commission * tdsRate) / 100;
   }
-  
-  // Calculate Gross Value: commission + GST - TDS
-  const grossValue = invoiceData.netPayable || (commission + gstAmount - tdsAmount);
+
+  // Gross = Taxable + GST - TDS (always compute for correct PDF display)
+  const grossValue = commission + gstAmount - tdsAmount;
 
   // Header Section
   addText('TAX INVOICE', pageWidth / 2, yPosition, {
