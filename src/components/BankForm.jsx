@@ -80,7 +80,6 @@ const BankForm = ({ bank, onSave, onClose }) => {
   const validate = () => {
     const newErrors = {}
     if (!formData.name || !formData.name.trim()) newErrors.name = 'Bank name is required'
-    if (!formData.type || formData.type === '') newErrors.type = 'Bank type is required'
     if (!formData.contactPerson || !formData.contactPerson.trim()) newErrors.contactPerson = 'Contact person is required'
     if (!formData.contactEmail || !formData.contactEmail.trim()) {
       newErrors.contactEmail = 'Contact email is required'
@@ -196,24 +195,6 @@ const BankForm = ({ bank, onSave, onClose }) => {
           placeholder="Enter bank name"
         />
         {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Bank Type <span className="text-red-500">*</span>
-        </label>
-        <select
-          name="type"
-          value={formData.type}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.type ? 'border-red-500' : 'border-gray-300'
-          }`}
-        >
-          <option value="bank">Bank</option>
-          <option value="nbfc">NBFC</option>
-        </select>
-        {errors.type && <p className="mt-1 text-sm text-red-600">{errors.type}</p>}
       </div>
 
       <div>
