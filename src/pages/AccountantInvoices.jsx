@@ -28,11 +28,16 @@ const AccountantInvoices = () => {
   const [statusFilter, setStatusFilter] = useState('all')
   const [franchiseFilter, setFranchiseFilter] = useState('')
   const [agentFilter, setAgentFilter] = useState('')
+  const [dateFromFilter, setDateFromFilter] = useState('')
+  const [dateToFilter, setDateToFilter] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState(null)
+  const [fullInvoiceDetails, setFullInvoiceDetails] = useState(null)
+  const [companySettings, setCompanySettings] = useState(null)
+  const [loadingInvoiceDetails, setLoadingInvoiceDetails] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, invoice: null })
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
@@ -153,12 +158,38 @@ const AccountantInvoices = () => {
         (lead && lead.loanAccountNo && lead.loanAccountNo.toLowerCase().includes(searchLower)) ||
         (invoice.agent?.name && invoice.agent.name.toLowerCase().includes(searchLower))
       const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter
+
+      // Date range filtering
+      if (dateFromFilter || dateToFilter) {
+        const invoiceDate = invoice.createdAt ? new Date(invoice.createdAt) : null
+        if (!invoiceDate) return false
+
+        if (dateFromFilter) {
+          const fromDate = new Date(dateFromFilter)
+          fromDate.setHours(0, 0, 0, 0)
+          if (invoiceDate < fromDate) return false
+        }
+
+        if (dateToFilter) {
+          const toDate = new Date(dateToFilter)
+          toDate.setHours(23, 59, 59, 999)
+          if (invoiceDate > toDate) return false
+        }
+      }
+
       return matchesSearch && matchesStatus
     })
-  }, [invoices, searchTerm, statusFilter, franchiseFilter, agentFilter, leads])
+  }, [invoices, searchTerm, statusFilter, franchiseFilter, agentFilter, dateFromFilter, dateToFilter, leads])
 
-  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== ''
-  const clearInvoiceFilters = () => { setSearchTerm(''); setStatusFilter('all'); setFranchiseFilter(''); setAgentFilter('') }
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== '' || dateFromFilter !== '' || dateToFilter !== ''
+  const clearInvoiceFilters = () => { 
+    setSearchTerm('')
+    setStatusFilter('all')
+    setFranchiseFilter('')
+    setAgentFilter('')
+    setDateFromFilter('')
+    setDateToFilter('')
+  }
 
   // Sort invoices
   const sortedInvoices = useMemo(() => {
@@ -217,9 +248,30 @@ const AccountantInvoices = () => {
     setIsEditModalOpen(true)
   }
 
-  const handleView = (invoice) => {
+  const handleView = async (invoice) => {
     setSelectedInvoice(invoice)
     setIsDetailModalOpen(true)
+    setLoadingInvoiceDetails(true)
+    
+    try {
+      const invoiceId = invoice.id || invoice._id
+      if (invoiceId) {
+        // Fetch full invoice details
+        const invoiceDetails = await api.invoices.getById(invoiceId)
+        const invoiceData = invoiceDetails.data || invoiceDetails
+        setFullInvoiceDetails(invoiceData)
+        
+        // Fetch company settings for GST calculation
+        const companySettingsResponse = await api.companySettings.get()
+        const settings = companySettingsResponse.data || companySettingsResponse || {}
+        setCompanySettings(settings)
+      }
+    } catch (error) {
+      console.error('Error fetching invoice details:', error)
+      toast.error('Error', 'Failed to load invoice details')
+    } finally {
+      setLoadingInvoiceDetails(false)
+    }
   }
 
   const handleSave = async (formData) => {
@@ -439,7 +491,7 @@ const AccountantInvoices = () => {
           </div>
         </div>
         {filtersOpen && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4 border-t border-gray-200">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white">
@@ -459,6 +511,25 @@ const AccountantInvoices = () => {
                 <option value="">All agents</option>
                 {agents.map((a) => <option key={a._id || a.id} value={a._id || a.id}>{a.name || a.email || 'Unnamed'}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+              <input
+                type="date"
+                value={dateFromFilter}
+                onChange={(e) => setDateFromFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+              <input
+                type="date"
+                value={dateToFilter}
+                onChange={(e) => setDateToFilter(e.target.value)}
+                min={dateFromFilter || undefined}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              />
             </div>
           </div>
         )}
@@ -722,67 +793,202 @@ const AccountantInvoices = () => {
         onClose={() => {
           setIsDetailModalOpen(false)
           setSelectedInvoice(null)
+          setFullInvoiceDetails(null)
+          setCompanySettings(null)
         }}
         title="Invoice Details"
-        size="md"
+        size="lg"
       >
-        {selectedInvoice && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">Invoice Number</label>
-                <p className="mt-1 text-sm font-mono text-gray-900">{selectedInvoice.invoiceNumber}</p>
+        {loadingInvoiceDetails ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">Loading invoice details...</p>
+          </div>
+        ) : (fullInvoiceDetails || selectedInvoice) && (() => {
+          const invoice = fullInvoiceDetails || selectedInvoice
+          const isGST = invoice.agent?.agentType === 'GST' || invoice.franchise?.franchiseType === 'GST'
+          const cgstRate = companySettings?.taxConfig?.cgstRate || 9
+          const sgstRate = companySettings?.taxConfig?.sgstRate || 9
+          const commissionAmount = invoice.commissionAmount || 0
+          const tdsAmount = invoice.tdsAmount || 0
+          const tdsPercentage = invoice.tdsPercentage || 0
+          const netPayable = invoice.netPayable || 0
+          
+          // Calculate GST if applicable
+          let cgstAmount = 0
+          let sgstAmount = 0
+          let totalGstAmount = 0
+          let totalAmountWithGst = 0
+          
+          if (isGST && commissionAmount > 0) {
+            totalGstAmount = (commissionAmount * (cgstRate + sgstRate)) / 100
+            cgstAmount = (commissionAmount * cgstRate) / 100
+            sgstAmount = (commissionAmount * sgstRate) / 100
+            totalAmountWithGst = commissionAmount + totalGstAmount
+          }
+          
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Invoice Number</label>
+                  <p className="mt-1 text-sm font-mono text-gray-900">{invoice.invoiceNumber}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <div className="mt-1">
+                    <StatusBadge status={invoice.status} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Invoice Type</label>
+                  <p className="mt-1 text-sm text-gray-900 capitalize">{invoice.invoiceType || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Lead Name</label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {(() => {
+                      if (invoice.lead && typeof invoice.lead === 'object') {
+                        return invoice.lead.customerName || invoice.lead.loanAccountNo || invoice.lead.leadId || 'N/A';
+                      }
+                      return getLeadName(invoice.leadId || invoice.lead);
+                    })()}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Agent</label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {invoice.agent?.name || 'N/A'}
+                    {invoice.agent?.agentType === 'GST' && (
+                      <span className="ml-2 text-xs bg-teal-100 text-teal-800 px-2 py-0.5 rounded">GST</span>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Franchise</label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {invoice.franchise?.name || 'N/A'}
+                    {invoice.franchise?.franchiseType === 'GST' && (
+                      <span className="ml-2 text-xs bg-teal-100 text-teal-800 px-2 py-0.5 rounded">GST</span>
+                    )}
+                  </p>
+                </div>
+                {invoice.subAgent && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Sub Agent</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {invoice.subAgent?.name || 'N/A'}
+                      {invoice.subAgent?.agentType === 'GST' && (
+                        <span className="ml-2 text-xs bg-teal-100 text-teal-800 px-2 py-0.5 rounded">GST</span>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Status</label>
-                <div className="mt-1">
-                  <StatusBadge status={selectedInvoice.status} />
+
+              {/* Financial Details */}
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Financial Details</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Commission Amount</label>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                      ₹{commissionAmount.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  {isGST && (
+                    <>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">GST Type</label>
+                        <p className="mt-1 text-sm text-gray-900">CGST + SGST</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">CGST ({cgstRate}%)</label>
+                        <p className="mt-1 text-sm text-gray-900">
+                          ₹{cgstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">SGST ({sgstRate}%)</label>
+                        <p className="mt-1 text-sm text-gray-900">
+                          ₹{sgstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Total GST ({(cgstRate + sgstRate)}%)</label>
+                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                          ₹{totalGstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Total Amount (with GST)</label>
+                        <p className="mt-1 text-sm font-semibold text-blue-900">
+                          ₹{totalAmountWithGst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">TDS ({tdsPercentage}%)</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      ₹{tdsAmount.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Net Payable</label>
+                    <p className="mt-1 text-sm font-bold text-green-900">
+                      ₹{netPayable.toLocaleString('en-IN')}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Lead Name</label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {(() => {
-                    // First try to get from populated lead object - prioritize customerName
-                    if (selectedInvoice.lead && typeof selectedInvoice.lead === 'object') {
-                      return selectedInvoice.lead.customerName || selectedInvoice.lead.loanAccountNo || selectedInvoice.lead.leadId || 'N/A';
-                    }
-                    // Fallback to lookup in leads array
-                    return getLeadName(selectedInvoice.leadId || selectedInvoice.lead);
-                  })()}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Amount</label>
-                <p className="mt-1 text-sm font-semibold text-gray-900">
-                  ₹{(selectedInvoice.amount || 0).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Due Date</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedInvoice.dueDate}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Created Date</label>
-                <p className="mt-1 text-sm text-gray-900">{selectedInvoice.createdAt}</p>
-              </div>
-            </div>
 
-            {canEditInvoice && (
-              <div className="pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setIsDetailModalOpen(false)
-                    handleEdit(selectedInvoice)
-                  }}
-                  className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-                >
-                  Edit Invoice
-                </button>
+              {/* Additional Details */}
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Additional Details</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Invoice Date</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {invoice.invoiceDate ? new Date(invoice.invoiceDate).toLocaleDateString('en-IN') : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Created Date</label>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-IN') : 'N/A'}
+                    </p>
+                  </div>
+                  {invoice.agent?.gst && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Agent GST No</label>
+                      <p className="mt-1 text-sm text-gray-900">{invoice.agent.gst}</p>
+                    </div>
+                  )}
+                  {invoice.franchise?.gst && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Franchise GST No</label>
+                      <p className="mt-1 text-sm text-gray-900">{invoice.franchise.gst}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        )}
+
+              {canEditInvoice && (
+                <div className="pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setIsDetailModalOpen(false)
+                      handleEdit(invoice)
+                    }}
+                    className="w-full px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+                  >
+                    Edit Invoice
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* Delete Confirmation Modal */}

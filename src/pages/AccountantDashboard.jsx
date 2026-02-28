@@ -39,6 +39,7 @@ import StatCard from '../components/StatCard';
 import NotificationDropdown from '../components/NotificationDropdown';
 import AccountantLeads from './AccountantLeads';
 import AccountantInvoices from './AccountantInvoices';
+import { formatInCrores } from '../utils/formatUtils';
 
 const AccountantDashboard = () => {
     const [activeTab, setActiveTab] = useState('Overview');
@@ -48,11 +49,16 @@ const AccountantDashboard = () => {
     const [unreadCount, setUnreadCount] = useState(0);
     const notificationRef = useRef(null);
 
+    const [funnelFilter, setFunnelFilter] = useState('monthly'); // 'weekly', 'monthly', 'yearly'
+
     useEffect(() => {
         const fetchDashboard = async () => {
             try {
                 setLoading(true);
-                const response = await api.accountant.getDashboard();
+                const params = {
+                    funnelPeriod: funnelFilter,
+                };
+                const response = await api.dashboard.getAccountsDashboard(params);
                 setDashboardData(response.data || response);
             } catch (error) {
                 console.error('Error fetching accountant dashboard:', error);
@@ -61,23 +67,25 @@ const AccountantDashboard = () => {
             }
         };
         fetchDashboard();
-    }, []);
+    }, [funnelFilter]);
 
     const {
-        financialSummary = {},
+        totalLeads = 0,
+        verifiedLeads = 0,
+        disbursedCases = 0,
+        activeAgents = 0,
+        totalInvoices = 0,
+        totalRevenue = 0,
+        totalLoanAmount = 0,
+        loanDistribution = [],
+        funnelData = [],
         recentLeads = [],
-        disbursementStats = {}
+        recentAgents = []
     } = dashboardData || {};
 
-    const {
-        totalApprovedAmount = 0,
-        totalDisbursedAmount = 0,
-        totalRemainingAmount = 0,
-        totalCommission = 0,
-        activeApprovedLoans = 0,
-        completedLoans = 0,
-        totalLoans = 0
-    } = financialSummary;
+    const totalLoanAmountForChart = Array.isArray(loanDistribution)
+        ? loanDistribution.reduce((sum, item) => sum + (item.totalAmount || 0), 0)
+        : 0;
 
     const navItems = [
         { name: 'Overview', icon: LayoutDashboard },
@@ -208,8 +216,8 @@ const AccountantDashboard = () => {
                                 color="orange"
                             />
                             <StatCard
-                                title="Total Revenue"
-                                value={`₹${(totalRevenue / 1000).toFixed(1)}K`}
+                                title="Total Amount"
+                                value={formatInCrores(totalLoanAmount || 0)}
                                 icon={DollarSign}
                                 color="purple"
                             />
@@ -219,49 +227,97 @@ const AccountantDashboard = () => {
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                             {/* Loan Distribution Chart */}
                             <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-6">Loan Distribution</h3>
-                                <div className="flex flex-col md:flex-row items-center gap-8">
-                                    <div className="relative w-48 h-48">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <PieChart>
-                                                <Pie
-                                                    data={loanDistribution}
-                                                    cx="50%"
-                                                    cy="50%"
-                                                    innerRadius={60}
-                                                    outerRadius={80}
-                                                    paddingAngle={5}
-                                                    dataKey="value"
-                                                >
-                                                    {loanDistribution.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                                    ))}
-                                                </Pie>
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <span className="text-2xl font-bold text-gray-800">
-                                                {loanDistribution[0]?.value || 0}%
-                                            </span>
+                                <h3 className="text-lg font-bold text-gray-900 mb-4">Loan Distribution</h3>
+                                {loanDistribution.length > 0 ? (
+                                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                                        <div className="w-full sm:w-48 h-48 relative flex-shrink-0 [&_svg]:outline-none [&_*]:outline-none">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <PieChart style={{ outline: 'none' }}>
+                                                    <Pie
+                                                        data={loanDistribution}
+                                                        dataKey="value"
+                                                        nameKey="name"
+                                                        cx="50%"
+                                                        cy="50%"
+                                                        innerRadius="55%"
+                                                        outerRadius="85%"
+                                                        paddingAngle={1}
+                                                        stroke="none"
+                                                        style={{ cursor: 'pointer', outline: 'none' }}
+                                                    >
+                                                        {loanDistribution.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                                                        ))}
+                                                    </Pie>
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <span className="text-lg font-bold text-gray-700 text-center px-2">
+                                                    {formatInCrores(totalLoanAmountForChart || totalLoanAmount || 0)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <ul className="space-y-2">
+                                                {loanDistribution.map((item, idx) => (
+                                                    <li
+                                                        key={idx}
+                                                        className="flex items-center gap-2 text-sm rounded px-1 py-0.5 -mx-1"
+                                                    >
+                                                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                                                        <span className="text-gray-700 truncate">
+                                                            {item.name} ({item.count || 0})
+                                                        </span>
+                                                        <span className="font-medium text-gray-900 ml-auto">
+                                                            {formatInCrores(item.totalAmount || 0)}
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </div>
                                     </div>
-                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-                                        {loanDistribution.map((item, index) => (
-                                            <div key={index} className="flex items-center justify-between text-sm">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
-                                                    <span className="text-gray-600">{item.name}</span>
-                                                </div>
-                                                <span className="font-bold text-gray-900">{item.value}%</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                ) : (
+                                    <p className="text-sm text-gray-500 text-center py-8">No loan distribution data</p>
+                                )}
                             </div>
 
                             {/* Lead Conversion Funnel */}
                             <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
-                                <h3 className="text-lg font-bold text-gray-900 mb-6">Lead Conversion Funnel</h3>
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-lg font-bold text-gray-900">Lead Conversion Funnel</h3>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setFunnelFilter('weekly')}
+                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                                                funnelFilter === 'weekly'
+                                                    ? 'bg-primary-900 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            Weekly
+                                        </button>
+                                        <button
+                                            onClick={() => setFunnelFilter('monthly')}
+                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                                                funnelFilter === 'monthly'
+                                                    ? 'bg-primary-900 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            Monthly
+                                        </button>
+                                        <button
+                                            onClick={() => setFunnelFilter('yearly')}
+                                            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                                                funnelFilter === 'yearly'
+                                                    ? 'bg-primary-900 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            Yearly
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="h-[300px] w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart
@@ -282,6 +338,8 @@ const AccountantDashboard = () => {
                                             <Tooltip
                                                 cursor={{ fill: '#f8fafc' }}
                                                 contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                                formatter={(value) => formatInCrores(value)}
+                                                labelFormatter={(label) => label}
                                             />
                                             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
                                                 {funnelData.map((entry, index) => (

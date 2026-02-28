@@ -11,6 +11,7 @@ import { toast } from '../services/toastService'
 import { exportToExcel } from '../utils/exportExcel'
 import { canExportData } from '../utils/roleUtils'
 import AccountantLeads from './AccountantLeads'
+import { formatInCrores } from '../utils/formatUtils'
 
 const Leads = () => {
   const userRole = authService.getUser()?.role || 'super_admin'
@@ -41,6 +42,8 @@ const Leads = () => {
   const [bankFilter, setBankFilter] = useState('')
   const [dsaCodeFilter, setDsaCodeFilter] = useState('')
   const [loanTypeFilter, setLoanTypeFilter] = useState('all')
+  const [dateFromFilter, setDateFromFilter] = useState('')
+  const [dateToFilter, setDateToFilter] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -58,6 +61,7 @@ const Leads = () => {
   const [selectedLeadForEmail, setSelectedLeadForEmail] = useState(null)
   const [editingCommission, setEditingCommission] = useState({ leadId: null, field: null })
   const [commissionEditValues, setCommissionEditValues] = useState({ percentage: '', amount: '' })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
 
   // Column configuration with all available fields
@@ -393,6 +397,24 @@ const Leads = () => {
         if (!leadType.includes(loanTypeFilter.trim().toLowerCase())) return false
       }
 
+      // Date range filtering
+      if (dateFromFilter || dateToFilter) {
+        const leadDate = lead.createdAt ? new Date(lead.createdAt) : null
+        if (!leadDate) return false
+
+        if (dateFromFilter) {
+          const fromDate = new Date(dateFromFilter)
+          fromDate.setHours(0, 0, 0, 0)
+          if (leadDate < fromDate) return false
+        }
+
+        if (dateToFilter) {
+          const toDate = new Date(dateToFilter)
+          toDate.setHours(23, 59, 59, 999)
+          if (leadDate > toDate) return false
+        }
+      }
+
       if (!hasSearch) return true
 
       const applicantEmail = lead.applicantEmail || lead.email || ''
@@ -409,9 +431,18 @@ const Leads = () => {
         loanAccountNo.toLowerCase().includes(searchLower)
       )
     })
-  }, [leads, searchTerm, statusFilter, franchiseFilter, agentFilter, bankFilter, dsaCodeFilter, loanTypeFilter])
+  }, [leads, searchTerm, statusFilter, franchiseFilter, agentFilter, bankFilter, dsaCodeFilter, loanTypeFilter, dateFromFilter, dateToFilter])
 
-  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== '' || bankFilter !== '' || dsaCodeFilter.trim() !== '' || (loanTypeFilter && loanTypeFilter !== 'all')
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || franchiseFilter !== '' || agentFilter !== '' || bankFilter !== '' || dsaCodeFilter.trim() !== '' || (loanTypeFilter && loanTypeFilter !== 'all') || dateFromFilter !== '' || dateToFilter !== ''
+  
+  // Calculate total loan amount from filtered leads
+  const totalFilteredLoanAmount = useMemo(() => {
+    return filteredLeads.reduce((sum, lead) => {
+      const loanAmount = lead.loanAmount || lead.amount || 0
+      return sum + (typeof loanAmount === 'number' ? loanAmount : parseFloat(loanAmount) || 0)
+    }, 0)
+  }, [filteredLeads])
+
   const clearLeadsFilters = () => {
     setSearchTerm('')
     setStatusFilter('all')
@@ -420,6 +451,8 @@ const Leads = () => {
     setBankFilter('')
     setDsaCodeFilter('')
     setLoanTypeFilter('all')
+    setDateFromFilter('')
+    setDateToFilter('')
   }
 
   // Sort leads
@@ -611,6 +644,13 @@ const Leads = () => {
   }
 
   const handleSave = async (formData) => {
+    // Prevent double submission
+    if (isSubmitting) {
+      toast.error('Error', 'Please wait, lead creation is already in progress')
+      return
+    }
+
+    setIsSubmitting(true)
     try {
       const isNewLead = formData.leadType === 'new_lead';
 
@@ -741,6 +781,8 @@ const Leads = () => {
       if (!error._toastShown) {
         toast.error('Error', error.message || 'Failed to save lead')
       }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1307,15 +1349,44 @@ const Leads = () => {
                   <option value="business">Business</option>
                 </select>
               </div>
-            </div>
-            {hasActiveFilters && (
-              <div className="flex items-center gap-2 pt-1">
-                <button type="button" onClick={clearLeadsFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">
-                  Clear all filters
-                </button>
-                <span className="text-sm text-gray-500">Showing {filteredLeads.length} of {leads.length} leads</span>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+                <input
+                  type="date"
+                  value={dateFromFilter}
+                  onChange={(e) => setDateFromFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                />
               </div>
-            )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+                <input
+                  type="date"
+                  value={dateToFilter}
+                  onChange={(e) => setDateToFilter(e.target.value)}
+                  min={dateFromFilter || undefined}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              {hasActiveFilters && (
+                <>
+                  <button type="button" onClick={clearLeadsFilters} className="text-sm text-primary-600 hover:text-primary-800 font-medium">
+                    Clear all filters
+                  </button>
+                  <span className="text-sm text-gray-500">Showing {filteredLeads.length} of {leads.length} leads</span>
+                </>
+              )}
+              {!hasActiveFilters && (
+                <span className="text-sm text-gray-500">Total {leads.length} leads</span>
+              )}
+              {totalFilteredLoanAmount > 0 && (
+                <span className="text-sm font-semibold text-gray-700">
+                  • Total Loan Amount: {formatInCrores(totalFilteredLoanAmount)}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2337,10 +2408,10 @@ const Leads = () => {
       {/* Create Modal */}
       <Modal
         isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => { setIsCreateModalOpen(false); setIsSubmitting(false); }}
         title="Create New Lead"
       >
-        <LeadForm onSave={handleSave} onClose={() => setIsCreateModalOpen(false)} />
+        <LeadForm onSave={handleSave} onClose={() => { setIsCreateModalOpen(false); setIsSubmitting(false); }} isSubmitting={isSubmitting} />
       </Modal>
 
       {/* Edit Modal */}
@@ -2349,10 +2420,11 @@ const Leads = () => {
         onClose={() => {
           setIsEditModalOpen(false)
           setSelectedLead(null)
+          setIsSubmitting(false)
         }}
         title="Edit Lead"
       >
-        <LeadForm lead={selectedLead} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} />
+        <LeadForm lead={selectedLead} onSave={handleSave} onClose={() => { setIsEditModalOpen(false); setIsSubmitting(false); }} isSubmitting={isSubmitting} />
       </Modal>
 
       {/* Detail Modal */}

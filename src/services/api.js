@@ -512,6 +512,16 @@ export const api = {
       const queryString = new URLSearchParams(params).toString();
       return apiRequest(`/documents/${entityType}/${entityId}${queryString ? `?${queryString}` : ''}`);
     },
+    /**
+     * Delete a document
+     * DELETE /documents/:id
+     * @param {String} documentId
+     */
+    delete: (documentId) => {
+      return apiRequest(`/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+    },
   },
 
   // Banks endpoints

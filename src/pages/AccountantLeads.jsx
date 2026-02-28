@@ -624,15 +624,51 @@ const AccountantLeads = () => {
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('commissionPercentage')}>
-                                        <div className="flex items-center gap-2">
-                                            <span>Commission %</span>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('agentCommissionPercentage')}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>Agent Comm %</span>
+
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('agentCommissionAmount')}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>Agent Comm AMT</span>
+
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('subAgentCommissionPercentage')}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>Sub Agent Comm %</span>
+
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('subAgentCommissionAmount')}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>Sub Agent Comm AMT</span>
+
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('commissionPercentage')}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>Associated Comm %</span>
 
                                         </div>
                                     </th>
                                     <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('commissionAmount')}>
                                         <div className="flex items-center justify-end gap-2">
-                                            <span>Commission</span>
+                                            <span>Associated Comm AMT</span>
+
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('referralFranchiseCommissionPercentage')}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>Refer Associated Comm %</span>
+
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('referralFranchiseCommissionAmount')}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            <span>Refer Associated Comm AMT</span>
 
                                         </div>
                                     </th>
@@ -651,10 +687,40 @@ const AccountantLeads = () => {
                                             <span>Associated</span>
                                         </div>
                                     </th>
+                                    <th className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <span>Referral Associated</span>
+                                        </div>
+                                    </th>
                                     <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('bank.name')}>
                                         <div className="flex items-center gap-2">
                                             <span>Bank</span>
 
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <span>SM/BM</span>
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <span>ASM</span>
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('branch')}>
+                                        <div className="flex items-center gap-2">
+                                            <span>Branch</span>
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('disbursementDate')}>
+                                        <div className="flex items-center gap-2">
+                                            <span>Disbursement Date</span>
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('sanctionedDate')}>
+                                        <div className="flex items-center gap-2">
+                                            <span>Sanctioned Date</span>
                                         </div>
                                     </th>
                                     <th className="px-6 py-4 whitespace-nowrap">
@@ -664,7 +730,11 @@ const AccountantLeads = () => {
                                     </th>
                                     <th className="px-6 py-4 whitespace-nowrap">Remark</th>
                                     <th className="px-6 py-4 whitespace-nowrap">GST</th>
-                                    <th className="px-6 py-4 whitespace-nowrap">DSA Code</th>
+                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('codeUse')}>
+                                        <div className="flex items-center gap-2">
+                                            <span>DSA Code</span>
+                                        </div>
+                                    </th>
                                     <th className="px-6 py-4 whitespace-nowrap">UTR Number</th>
                                     <th className="px-6 py-4 whitespace-nowrap">Generate Invoice</th>
                                     <th className="px-6 py-4 whitespace-nowrap">Actions</th>
@@ -725,17 +795,41 @@ const AccountantLeads = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600 text-right font-mono">
                                                     {formatCurrency(remainingAmount)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                                                    <div className="flex items-center gap-1">
-                                                        <Percent size={12} />
-                                                        {(() => {
-                                                        const percentage = lead.commissionPercentage || lead.agentCommissionPercentage || 0;
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                    {(() => {
+                                                        const percentage = lead.agentCommissionPercentage || 0;
                                                         return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
                                                     })()}%
-                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
-                                                    {formatCurrency(lead.commissionAmount || lead.agentCommissionAmount || 0)}
+                                                    {formatCurrency(lead.agentCommissionAmount || 0)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                    {(() => {
+                                                        const percentage = lead.subAgentCommissionPercentage || 0;
+                                                        return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
+                                                    })()}%
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
+                                                    {formatCurrency(lead.subAgentCommissionAmount || 0)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                    {(() => {
+                                                        const percentage = lead.commissionPercentage || 0;
+                                                        return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
+                                                    })()}%
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
+                                                    {formatCurrency(lead.commissionAmount || 0)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                    {(() => {
+                                                        const percentage = lead.referralFranchiseCommissionPercentage || 0;
+                                                        return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
+                                                    })()}%
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
+                                                    {formatCurrency(lead.referralFranchiseCommissionAmount || 0)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                                     {lead.agentName || lead.agent?.name || 'N/A'}
@@ -747,7 +841,25 @@ const AccountantLeads = () => {
                                                     {lead.associated?.name || 'N/A'}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {lead.referralFranchise?.name || lead.referralAssociated?.name || 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                                     {lead.bank?.name || lead.bankName || 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {lead.smBm?.name || lead.smBmName || 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {lead.asm?.name || lead.asmName || 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {lead.branch || 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {lead.disbursementDate ? new Date(lead.disbursementDate).toLocaleDateString() : 'N/A'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {lead.sanctionedDate ? new Date(lead.sanctionedDate).toLocaleDateString() : 'N/A'}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                     {new Date(lead.createdAt).toLocaleDateString()}
@@ -761,7 +873,7 @@ const AccountantLeads = () => {
                                                     {formatCurrency(lead.gst || 0)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500">
-                                                    {lead.dsaCode || 'N/A'}
+                                                    {lead.codeUse || lead.dsaCode || 'N/A'}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500 max-w-[100px] truncate">
                                                     <span title={lead.utrNumber || 'N/A'}>
@@ -807,9 +919,10 @@ const AccountantLeads = () => {
                                                                             e.stopPropagation();
                                                                             try {
                                                                                 // Check if agent commission percentage is set
-                                                                                const agentCommissionPercentage = lead.agentCommissionPercentage || 0;
+                                                                                // Try agentCommissionPercentage first, then fallback to commissionPercentage
+                                                                                const agentCommissionPercentage = lead.agentCommissionPercentage || lead.commissionPercentage || 0;
                                                                                 if (agentCommissionPercentage <= 0) {
-                                                                                    toast.error('Error', 'Cannot generate invoice. Agent commission percentage is not set or is zero.');
+                                                                                    toast.error('Error', 'Cannot generate invoice. Agent commission percentage is not set or is zero. Please set the commission percentage for this lead.');
                                                                                     return;
                                                                                 }
 

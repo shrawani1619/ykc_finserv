@@ -5,6 +5,7 @@ import {
   CheckCircle,
   AlertCircle,
   FileCheck,
+  Building2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from 'recharts'
@@ -14,12 +15,14 @@ import api from '../services/api'
 import { authService } from '../services/auth.service'
 import { toast } from '../services/toastService'
 import AccountantOverview from './AccountantOverview'
+import { formatInCrores } from '../utils/formatUtils'
 
 const Dashboard = () => {
   const navigate = useNavigate()
   const [stats, setStats] = useState({
     totalLeads: 0,
     totalAgents: 0,
+    totalFranchises: 0,
     totalInvoices: 0,
     totalRevenue: 0,
     totalLoanAmount: 0,
@@ -95,10 +98,12 @@ const Dashboard = () => {
           invoices: data.invoices || {},
           payouts: data.payouts || {},
         })
+        setLeadConversionFunnel(Array.isArray(data.leadConversionFunnel) ? data.leadConversionFunnel : [])
       } else {
         setStats({
           totalLeads: data.totalLeads || data.leads?.total || 0,
           totalAgents: data.totalAgents || data.agents?.total || 0,
+          totalFranchises: data.totalFranchises || 0,
           totalInvoices: data.totalInvoices || data.invoices?.total || 0,
           totalRevenue: data.totalRevenue || data.revenue || data.totalCommission || 0,
           totalLoanAmount: data.totalLoanAmount || 0,
@@ -143,6 +148,7 @@ const Dashboard = () => {
       setStats({
         totalLeads: 0,
         totalAgents: 0,
+        totalFranchises: 0,
         totalInvoices: 0,
         totalRevenue: 0,
       })
@@ -195,9 +201,14 @@ const Dashboard = () => {
     }
   }
 
-  const { totalLeads, totalAgents, totalRevenue, totalLoanAmount } = stats
+  const { totalLeads, totalAgents, totalFranchises, totalRevenue, totalLoanAmount } = stats
   const isAgent = userRole === 'agent'
   const isAccountant = userRole === 'accounts_manager'
+
+  // For admin / regional / RM / franchise dashboards: aggregate total loan amount by type
+  const totalLoanAmountForChart = Array.isArray(loanDistribution)
+    ? loanDistribution.reduce((sum, item) => sum + (item.totalAmount || 0), 0)
+    : 0
 
   // Render Accountant-specific dashboard
   if (isAccountant) {
@@ -363,11 +374,82 @@ const Dashboard = () => {
               </div>
             </div>
           )}
+
+          {/* Lead Conversion Funnel */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Lead Conversion Funnel</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setFunnelFilter('weekly')
+                  }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    funnelFilter === 'weekly'
+                      ? 'bg-primary-900 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Weekly
+                </button>
+                <button
+                  onClick={() => {
+                    setFunnelFilter('monthly')
+                  }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    funnelFilter === 'monthly'
+                      ? 'bg-primary-900 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => {
+                    setFunnelFilter('yearly')
+                  }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    funnelFilter === 'yearly'
+                      ? 'bg-primary-900 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Yearly
+                </button>
+              </div>
+            </div>
+            {leadConversionFunnel.length > 0 ? (
+              <div className="space-y-2 max-w-md">
+                {leadConversionFunnel.map((stage) => {
+                  const maxVal = Math.max(...leadConversionFunnel.map((s) => s.value || 0), 1)
+                  const widthPct = maxVal > 0 ? Math.max(((stage.value || 0) / maxVal) * 100, 18) : 18
+                  return (
+                    <div key={stage.stage} className="flex items-center gap-3">
+                      <div
+                        className="h-11 rounded flex items-center px-3 transition-all min-w-[120px]"
+                        style={{
+                          width: `${widthPct}%`,
+                          backgroundColor: stage.fill,
+                        }}
+                      >
+                        <span className="text-white font-medium text-sm truncate">{stage.stage}</span>
+                      </div>
+                      <span className="text-gray-700 font-semibold tabular-nums text-right flex-shrink-0 min-w-[80px]">
+                        {formatInCrores(stage.value || 0)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-8">No funnel data</p>
+            )}
+          </div>
         </>
       ) : (
         <>
           {/* Summary Cards - Admin/Relationship Manager */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <StatCard
               title="Total Leads"
               value={totalLeads}
@@ -381,8 +463,14 @@ const Dashboard = () => {
               color="green"
             />
             <StatCard
+              title="Active Franchises"
+              value={totalFranchises}
+              icon={Building2}
+              color="teal"
+            />
+            <StatCard
               title="Total Amount"
-              value={`₹${(totalLoanAmount / 100000).toFixed(1)}L`}
+              value={formatInCrores(totalLoanAmount || 0)}
               icon={IndianRupeeIcon}
               color="orange"
             />
@@ -425,10 +513,8 @@ const Dashboard = () => {
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <span className="text-2xl font-bold text-gray-700">
-                          {loanDistribution.length > 0
-                            ? `${loanDistribution[Math.min(selectedLoanSegmentIndex ?? 0, loanDistribution.length - 1)].value}%`
-                            : '0%'}
+                        <span className="text-lg font-bold text-gray-700 text-center px-2">
+                          {formatInCrores(totalLoanAmountForChart || totalLoanAmount || 0)}
                         </span>
                       </div>
                     </div>
@@ -444,8 +530,12 @@ const Dashboard = () => {
                             className={`flex items-center gap-2 text-sm cursor-pointer rounded px-1 py-0.5 -mx-1 hover:bg-gray-100 ${selectedLoanSegmentIndex === idx ? 'bg-gray-100' : ''}`}
                           >
                             <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                            <span className="text-gray-700 truncate">{item.name}</span>
-                            <span className="font-medium text-gray-900 ml-auto">{item.value}%</span>
+                            <span className="text-gray-700 truncate">
+                              {item.name} ({item.count || 0})
+                            </span>
+                            <span className="font-medium text-gray-900 ml-auto">
+                              {formatInCrores(item.totalAmount || 0)}
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -494,8 +584,8 @@ const Dashboard = () => {
                 {leadConversionFunnel.length > 0 ? (
                   <div className="space-y-2 max-w-md">
                     {leadConversionFunnel.map((stage) => {
-                      const maxVal = Math.max(...leadConversionFunnel.map((s) => s.value), 1)
-                      const widthPct = maxVal > 0 ? Math.max((stage.value / maxVal) * 100, 18) : 18
+                      const maxVal = Math.max(...leadConversionFunnel.map((s) => s.value || 0), 1)
+                      const widthPct = maxVal > 0 ? Math.max(((stage.value || 0) / maxVal) * 100, 18) : 18
                       return (
                         <div key={stage.stage} className="flex items-center gap-3">
                           <div
@@ -507,7 +597,9 @@ const Dashboard = () => {
                           >
                             <span className="text-white font-medium text-sm truncate">{stage.stage}</span>
                           </div>
-                          <span className="text-gray-700 font-semibold tabular-nums w-12 text-right flex-shrink-0">{stage.value}</span>
+                          <span className="text-gray-700 font-semibold tabular-nums text-right flex-shrink-0 min-w-[80px]">
+                            {formatInCrores(stage.value || 0)}
+                          </span>
                         </div>
                       )
                     })}
@@ -515,127 +607,6 @@ const Dashboard = () => {
                 ) : (
                   <p className="text-sm text-gray-500 text-center py-8">No funnel data</p>
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* Related Lists Section - Admin Only */}
-          {(authService.getUser()?.role === 'super_admin' || authService.getUser()?.role === 'regional_manager' || authService.getUser()?.role === 'relationship_manager') && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Leads */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">Recent Leads</h2>
-                  <a href="/leads" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-                </div>
-                <div className="space-y-3">
-                  {relatedLists.recentLeads.length > 0 ? (
-                    relatedLists.recentLeads.map((lead) => (
-                      <div key={lead.id || lead._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{lead.loanAccountNo || 'N/A'}</p>
-                          <p className="text-xs text-gray-600">
-                            {lead.agent?.name || 'N/A'} • {lead.franchise?.name || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-gray-900">₹{(lead.loanAmount || 0).toLocaleString()}</p>
-                          <p className="text-xs text-gray-500">{lead.status || 'N/A'}</p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No recent leads</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Recent Agents */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">Recent Agents</h2>
-                  <a href="/agents" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-                </div>
-                <div className="space-y-3">
-                  {relatedLists.recentAgents.length > 0 ? (
-                    relatedLists.recentAgents.map((agent) => (
-                      <div key={agent.id || agent._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{agent.name || 'N/A'}</p>
-                          <p className="text-xs text-gray-600">
-                            {agent.email || 'N/A'} • {agent.franchise?.name || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`text-xs px-2 py-1 rounded-full ${agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                            {agent.status || 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No recent agents</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Recent Franchises */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">Recent Franchises</h2>
-                  <a href="/franchises" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-                </div>
-                <div className="space-y-3">
-                  {relatedLists.recentFranchises.length > 0 ? (
-                    relatedLists.recentFranchises.map((franchise) => (
-                      <div key={franchise.id || franchise._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{franchise.name || 'N/A'}</p>
-                          <p className="text-xs text-gray-600">
-                            {franchise.ownerName || 'N/A'} • {franchise.email || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`text-xs px-2 py-1 rounded-full ${franchise.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                            {franchise.status || 'N/A'}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No recent franchises</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Recent Invoices */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold text-gray-900">Recent Invoices</h2>
-                  <a href="/invoices" className="text-sm text-primary-900 hover:text-primary-800">View All</a>
-                </div>
-                <div className="space-y-3">
-                  {relatedLists.recentInvoices.length > 0 ? (
-                    relatedLists.recentInvoices.map((invoice) => (
-                      <div key={invoice.id || invoice._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">{invoice.invoiceNumber || 'N/A'}</p>
-                          <p className="text-xs text-gray-600">
-                            {invoice.agent?.name || 'N/A'} • {invoice.franchise?.name || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-gray-900">₹{(invoice.commissionAmount || invoice.amount || invoice.netPayable || 0).toLocaleString()}</p>
-                          <p className="text-xs text-gray-500">{invoice.status || 'N/A'}</p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">No recent invoices</p>
-                  )}
-                </div>
               </div>
             </div>
           )}

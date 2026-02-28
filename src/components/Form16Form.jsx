@@ -2,14 +2,15 @@ import { useState, useEffect } from 'react'
 import { Upload, X, FileText } from 'lucide-react'
 import api from '../services/api'
 import { toast } from '../services/toastService'
+import { authService } from '../services/auth.service'
 
 const PLACEHOLDER_URL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
 const Form16Form = ({ form16, onSave, onClose }) => {
   const [formData, setFormData] = useState({
     attachmentName: '',
-    attachmentDate: '',
     formType: 'form16',
+    user: '',
   })
 
   const [attachment, setAttachment] = useState(null)
@@ -17,35 +18,81 @@ const Form16Form = ({ form16, onSave, onClose }) => {
   const [pendingFile, setPendingFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [errors, setErrors] = useState({})
+  const [users, setUsers] = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const userRole = authService.getUser()?.role
+  const isAdminOrAccountant = userRole === 'super_admin' || userRole === 'accounts_manager'
+
+  useEffect(() => {
+    // Fetch users if admin or accountant
+    if (isAdminOrAccountant && !form16) {
+      fetchUsers()
+    }
+  }, [isAdminOrAccountant, form16])
 
   useEffect(() => {
     if (form16) {
       setFormData({
         attachmentName: form16.attachmentName || '',
-        attachmentDate: form16.attachmentDate
-          ? new Date(form16.attachmentDate).toISOString().slice(0, 10)
-          : '',
         formType: form16.formType || 'form16',
+        user: form16.user?._id || form16.user || '',
       })
       if (form16.attachment) {
         setAttachmentPreview(form16.attachment)
       }
     } else {
+      // For new forms, set current user if not admin/accountant
+      const currentUser = authService.getUser()
       setFormData({
         attachmentName: '',
-        attachmentDate: '',
         formType: 'form16',
+        user: isAdminOrAccountant ? '' : (currentUser?._id || currentUser?.id || ''),
       })
       setAttachment(null)
       setAttachmentPreview(null)
       setPendingFile(null)
     }
-  }, [form16])
+  }, [form16, isAdminOrAccountant])
+
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true)
+      // Fetch users from multiple roles: agent, franchise, relationship_manager, regional_manager
+      const roles = ['agent', 'franchise', 'relationship_manager', 'regional_manager']
+      const allUsers = []
+
+      // Fetch users for each role
+      for (const role of roles) {
+        try {
+          const response = await api.users.getAll({ role, limit: 1000 })
+          const data = response.data || response || []
+          if (Array.isArray(data)) {
+            allUsers.push(...data)
+          }
+        } catch (error) {
+          console.error(`Error fetching ${role} users:`, error)
+          // Continue with other roles even if one fails
+        }
+      }
+
+      // Remove duplicates based on _id
+      const uniqueUsers = allUsers.filter((user, index, self) =>
+        index === self.findIndex((u) => (u._id || u.id) === (user._id || user.id))
+      )
+
+      setUsers(uniqueUsers)
+    } catch (error) {
+      console.error('Error fetching users:', error)
+      setUsers([])
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
 
   const validate = () => {
     const newErrors = {}
-    if (!formData.attachmentDate) {
-      newErrors.attachmentDate = 'Attachment date is required'
+    if (isAdminOrAccountant && !formData.user) {
+      newErrors.user = 'User selection is required'
     }
     if (!attachment && !attachmentPreview && !pendingFile) {
       newErrors.attachment = 'Attachment is required'
@@ -144,7 +191,7 @@ const Form16Form = ({ form16, onSave, onClose }) => {
           formType: formData.formType,
           attachmentName: formData.attachmentName?.trim() || '',
           attachment: PLACEHOLDER_URL,
-          attachmentDate: formData.attachmentDate,
+          user: formData.user || undefined,
           status: 'active',
         }
 
@@ -170,7 +217,7 @@ const Form16Form = ({ form16, onSave, onClose }) => {
           formType: formData.formType,
           attachmentName: formData.attachmentName?.trim() || '',
           attachment: fileUrl,
-          attachmentDate: formData.attachmentDate,
+          user: formData.user || undefined,
           fileName: pendingFile.name,
           fileSize: pendingFile.size,
           mimeType: pendingFile.type,
@@ -214,7 +261,7 @@ const Form16Form = ({ form16, onSave, onClose }) => {
       formType: formData.formType,
       attachmentName: formData.attachmentName?.trim() || '',
       attachment: attachmentData.url,
-      attachmentDate: formData.attachmentDate,
+      user: formData.user || undefined,
       fileName: attachmentData.fileName,
       fileSize: attachmentData.fileSize,
       mimeType: attachmentData.mimeType,
@@ -232,6 +279,36 @@ const Form16Form = ({ form16, onSave, onClose }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {isAdminOrAccountant && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Select User <span className="text-red-500">*</span>
+          </label>
+          {loadingUsers ? (
+            <p className="text-sm text-gray-500">Loading users...</p>
+          ) : (
+            <select
+              name="user"
+              value={formData.user}
+              onChange={handleChange}
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                errors.user ? 'border-red-500' : 'border-gray-300'
+              }`}
+            >
+              <option value="">Select a user</option>
+              {users.map((user) => (
+                <option key={user._id || user.id} value={user._id || user.id}>
+                  {user.name || user.email} ({user.role || 'N/A'})
+                </option>
+              ))}
+            </select>
+          )}
+          {errors.user && (
+            <p className="mt-1 text-sm text-red-600">{errors.user}</p>
+          )}
+        </div>
+      )}
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Attachment Name
@@ -244,24 +321,6 @@ const Form16Form = ({ form16, onSave, onClose }) => {
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           placeholder="Enter attachment name"
         />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Attachment Date <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="date"
-          name="attachmentDate"
-          value={formData.attachmentDate}
-          onChange={handleChange}
-          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-            errors.attachmentDate ? 'border-red-500' : 'border-gray-300'
-          }`}
-        />
-        {errors.attachmentDate && (
-          <p className="mt-1 text-sm text-red-600">{errors.attachmentDate}</p>
-        )}
       </div>
 
       <div>

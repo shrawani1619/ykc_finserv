@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { Upload, X, File, Download, Trash2 } from 'lucide-react';
 import api from '../services/api';
 import { toast } from '../services/toastService';
 import { authService } from '../services/auth.service';
@@ -14,7 +15,7 @@ const LOAN_TYPES = [
   { value: 'education_loan', label: 'Education' },
 ];
 
-export default function LeadForm({ lead = null, onSave, onClose }) {
+export default function LeadForm({ lead = null, onSave, onClose, isSubmitting = false }) {
   const userRole = authService.getUser()?.role || '';
   const isAgent = userRole === 'agent';
   const isAdmin = userRole === 'super_admin';
@@ -108,6 +109,10 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
   const [documentTypes, setDocumentTypes] = useState(() => (lead?.documentTypes || []));
   const [uploadedDocs, setUploadedDocs] = useState(() => (lead?.documents || []));
   const [uploading, setUploading] = useState(false);
+  
+  // Attachments state (for general attachments, separate from required documents)
+  const [attachments, setAttachments] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
 
   // temp id for pre-uploading docs before lead is created
   const tempEntityId = useMemo(() => `temp-${Date.now()}-${Math.round(Math.random() * 1e6)}`, []);
@@ -123,6 +128,83 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
     };
     load();
   }, []);
+
+  // Fetch attachments when editing a lead
+  useEffect(() => {
+    if (lead && (lead.id || lead._id)) {
+      fetchAttachments(lead.id || lead._id);
+    }
+  }, [lead]);
+
+  const fetchAttachments = async (leadId) => {
+    if (!leadId) return;
+    try {
+      setLoadingAttachments(true);
+      const response = await api.documents.list('lead', leadId);
+      const documents = response.data || response || [];
+      // Filter out required documents, only show general attachments (documentType === 'attachment')
+      const generalAttachments = Array.isArray(documents) 
+        ? documents.filter(doc => doc.documentType === 'attachment' || (!doc.documentType && !documentTypes?.some(dt => dt.key === doc.documentType)))
+        : [];
+      setAttachments(generalAttachments);
+    } catch (error) {
+      console.error('Error fetching attachments:', error);
+      setAttachments([]);
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+
+  const handleAttachmentUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    
+    const leadId = lead?.id || lead?._id;
+    if (!leadId) {
+      toast.error('Error', 'Please save the lead first before uploading attachments');
+      return;
+    }
+
+    const filesArray = Array.from(files);
+    setUploading(true);
+
+    try {
+      const uploadPromises = filesArray.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('entityType', 'lead');
+        formData.append('entityId', leadId);
+        formData.append('documentType', 'attachment');
+        formData.append('description', `Lead attachment: ${file.name}`);
+
+        const response = await api.documents.upload(formData);
+        return response.data || response;
+      });
+
+      const uploadedDocs = await Promise.all(uploadPromises);
+      setAttachments(prev => [...prev, ...uploadedDocs]);
+      toast.success('Success', `Successfully uploaded ${uploadedDocs.length} file(s)`);
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      toast.error('Upload Failed', error.message || 'Failed to upload files');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (documentId) => {
+    if (!window.confirm('Are you sure you want to delete this attachment?')) {
+      return;
+    }
+
+    try {
+      await api.documents.delete(documentId);
+      setAttachments(prev => prev.filter(att => (att.id || att._id) !== documentId));
+      toast.success('Success', 'Attachment deleted successfully');
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+      toast.error('Error', error.message || 'Failed to delete attachment');
+    }
+  };
 
   // Fetch franchises for Refer Franchise dropdown
   useEffect(() => {
@@ -1359,15 +1441,98 @@ export default function LeadForm({ lead = null, onSave, onClose }) {
         </>
       )}
 
+      {/* Attachments Section - Only show when editing existing lead and user is accountant */}
+      {lead && isAccountant && (
+        <div className="border-t border-gray-200 pt-6 mt-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Attachments
+          </label>
+          
+          {/* File Upload Input */}
+          <div className="mb-4">
+            <input
+              type="file"
+              id="lead-attachments"
+              multiple
+              onChange={(e) => handleAttachmentUpload(e.target.files)}
+              disabled={uploading}
+              className="hidden"
+            />
+            <label
+              htmlFor="lead-attachments"
+              className={`flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 hover:bg-primary-50 transition-colors ${
+                uploading ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              <Upload className="w-5 h-5 text-gray-500" />
+              <span className="text-sm text-gray-700">
+                {uploading ? 'Uploading...' : 'Upload Attachments (Multiple files allowed)'}
+              </span>
+            </label>
+          </div>
+
+          {/* Existing Attachments List */}
+          {loadingAttachments ? (
+            <div className="text-sm text-gray-500 py-2">Loading attachments...</div>
+          ) : attachments.length > 0 ? (
+            <div className="space-y-2">
+              {attachments.map((attachment) => (
+                <div
+                  key={attachment.id || attachment._id}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <File className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {attachment.fileName || attachment.name || 'Attachment'}
+                      </p>
+                      {attachment.fileSize && (
+                        <p className="text-xs text-gray-500">
+                          {(attachment.fileSize / 1024).toFixed(1)} KB
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {attachment.url && (
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Download"
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAttachment(attachment.id || attachment._id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 py-2">No attachments uploaded yet</p>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-end gap-3 pt-6 border-t font-semibold">
         <button type="button" className="px-5 py-2 border rounded-lg" onClick={onClose}>Cancel</button>
         <button
           type="button"
           className="px-8 py-2 bg-primary-900 text-white rounded-lg disabled:opacity-50"
-          disabled={uploading || (isAgent && selectedBank && !leadFormDef && !loadingFormDef)}
+          disabled={uploading || isSubmitting || (isAgent && selectedBank && !leadFormDef && !loadingFormDef)}
           onClick={validateAndSubmit}
         >
-          {uploading ? 'Processing...' : (lead ? 'Update' : 'Create')}
+          {uploading || isSubmitting ? 'Processing...' : (lead ? 'Update' : 'Create')}
         </button>
       </div>
     </div>
