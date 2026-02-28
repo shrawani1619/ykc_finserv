@@ -100,6 +100,7 @@ const Invoices = () => {
     .reduce((sum, inv) => {
       return sum + (inv.commissionAmount || inv.netPayable || inv.amount || 0)
     }, 0)
+  const pendingAmount = totalAmount - paidAmount
 
   // Filter and search invoices
   const filteredInvoices = useMemo(() => {
@@ -438,8 +439,28 @@ const Invoices = () => {
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Compact Summary Bar - Mobile Only */}
+      <div className="md:hidden bg-gradient-to-r from-gray-50 to-white rounded-lg shadow-sm border border-gray-200 px-4 py-3.5">
+        <div className="flex items-center justify-between text-xs sm:text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Total</span>
+            <span className="font-bold text-gray-900">₹{(totalAmount / 1000).toFixed(1)}K</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Paid</span>
+            <span className="font-bold text-green-600">₹{(paidAmount / 1000).toFixed(1)}K</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Pending</span>
+            <span className="font-bold text-orange-600">₹{(pendingAmount / 1000).toFixed(1)}K</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Statistics Cards - Desktop Only */}
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Invoices"
           value={totalInvoices}
@@ -466,8 +487,8 @@ const Invoices = () => {
         />
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Filters - Sticky on Mobile */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden md:relative sticky top-0 z-20 md:z-auto md:shadow-sm">
         <button type="button" onClick={() => setFiltersOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
           <span className="flex items-center gap-2 font-medium text-gray-900">
             <Filter className="w-5 h-5 text-gray-500" />

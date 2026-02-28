@@ -526,8 +526,28 @@ const Agents = () => {
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Compact Summary Bar - Mobile Only */}
+      <div className="md:hidden bg-gradient-to-r from-gray-50 to-white rounded-lg shadow-sm border border-gray-200 px-4 py-3.5">
+        <div className="flex items-center justify-between text-xs sm:text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Total</span>
+            <span className="font-bold text-gray-900">{totalAgents}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Active</span>
+            <span className="font-bold text-green-600">{activeAgents}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Leads</span>
+            <span className="font-bold text-orange-600">{totalLeadsCount}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Statistics Cards - Desktop Only */}
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Agents"
           value={totalAgents}
@@ -554,8 +574,8 @@ const Agents = () => {
         />
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Filters - Sticky on Mobile */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden md:relative sticky top-0 z-20 md:z-auto md:shadow-sm">
         <button
           type="button"
           onClick={() => setFiltersOpen((o) => !o)}

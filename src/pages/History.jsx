@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Search, Filter, ChevronDown, ChevronUp, Calendar, User, Trash2, Edit, Plus, FileText, Building2, Store, Users, RefreshCw, Eye, ChevronRight } from 'lucide-react'
 import api from '../services/api'
 import { toast } from '../services/toastService'
@@ -19,6 +19,8 @@ const History = () => {
 
   useEffect(() => {
     fetchHistory()
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [currentPage, actionFilter, entityTypeFilter, startDate, endDate])
 
   const fetchHistory = async () => {
@@ -561,8 +563,8 @@ const History = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredHistory.map((item) => (
-                    <>
-                      <tr key={item._id} className="hover:bg-gray-50">
+                    <React.Fragment key={item._id || item.id}>
+                      <tr className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatDate(item.createdAt)}
                         </td>
@@ -634,7 +636,7 @@ const History = () => {
                         </td>
                       </tr>
                       {renderEntityDetails(item)}
-                    </>
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -642,22 +644,28 @@ const History = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-700">
-                  Showing page {currentPage} of {totalPages} ({totalItems} total records)
+              <div className="px-4 sm:px-6 py-4 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-center justify-between gap-3 sticky bottom-0 z-10">
+                <div className="text-xs sm:text-sm text-gray-700 text-center sm:text-left">
+                  Showing page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalPages}</span> ({totalItems} total records)
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
                   <button
-                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    onClick={() => {
+                      setCurrentPage((prev) => Math.max(1, prev - 1))
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
                   >
                     Previous
                   </button>
                   <button
-                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                    disabled={currentPage >= totalPages || history.length === 0}
+                    className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white disabled:blur-[0.5px] transition-all"
                   >
                     Next
                   </button>

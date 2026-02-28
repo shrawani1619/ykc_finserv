@@ -260,6 +260,7 @@ const Payouts = () => {
   const paidAmount = payouts
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + (p.netPayable || 0), 0)
+  const pendingAmount = totalAmount - paidAmount
 
   const statusOptions = [
     { value: 'all', label: 'All Status' },
@@ -282,37 +283,57 @@ const Payouts = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Payouts</h1>
-          <p className="text-sm text-gray-600 mt-1">Manage bank payments to company</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Payouts</h1>
+          <p className="text-xs sm:text-sm text-gray-600 mt-1">Manage bank payments to company</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {canExportData(userRole) && (
             <button
               onClick={() => exportToExcel(filteredPayouts, 'payouts')}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <FileDown className="w-5 h-5" />
-              <span>Export</span>
+              <FileDown className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Export</span>
             </button>
           )}
           {canCreate && (
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm sm:text-base bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>Add Payout</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Compact Summary Bar - Mobile Only */}
+      <div className="md:hidden bg-gradient-to-r from-gray-50 to-white rounded-lg shadow-sm border border-gray-200 px-4 py-3.5">
+        <div className="flex items-center justify-between text-xs sm:text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Total</span>
+            <span className="font-bold text-gray-900">{formatInCrores(totalAmount)}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Paid</span>
+            <span className="font-bold text-green-600">{formatInCrores(paidAmount)}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Pending</span>
+            <span className="font-bold text-orange-600">{formatInCrores(pendingAmount)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards - Desktop Only */}
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -359,8 +380,8 @@ const Payouts = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Filters - Sticky on Mobile */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden md:relative sticky top-0 z-20 md:z-auto md:shadow-sm">
         <button
           type="button"
           onClick={() => setFiltersOpen((o) => !o)}
@@ -377,7 +398,7 @@ const Payouts = () => {
         </button>
         {filtersOpen && (
           <div className="border-t border-gray-200 p-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
                 <div className="relative">
@@ -458,64 +479,67 @@ const Payouts = () => {
         )}
       </div>
 
-      {/* Payouts Table */}
+      {/* Payouts Table - First on Mobile */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+        <div className="overflow-x-auto overflow-y-visible" style={{ maxHeight: 'calc(100vh - 400px)' }}>
+          <table className="w-full min-w-[800px]">
+            <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
               <tr>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                   onClick={() => handleSort('payoutNumber')}
                 >
-                  <div className="flex items-center gap-2">
-                    Payout Number
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <span className="hidden sm:inline">Payout Number</span>
+                    <span className="sm:hidden">Payout</span>
                     {getSortIcon('payoutNumber')}
                   </div>
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                   onClick={() => handleSort('agent')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     Agent
                     {getSortIcon('agent')}
                   </div>
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                   onClick={() => handleSort('franchise')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     Franchise
                     {getSortIcon('franchise')}
                   </div>
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                   onClick={() => handleSort('totalAmount')}
                 >
-                  <div className="flex items-center gap-2">
-                    Total Amount
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <span className="hidden md:inline">Total Amount</span>
+                    <span className="md:hidden">Total</span>
                     {getSortIcon('totalAmount')}
                   </div>
                 </th>
                 <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                   onClick={() => handleSort('netPayable')}
                 >
-                  <div className="flex items-center gap-2">
-                    Net Payable
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <span className="hidden md:inline">Net Payable</span>
+                    <span className="md:hidden">Net</span>
                     {getSortIcon('netPayable')}
                   </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap hidden sm:table-cell">
                   Receipt
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 md:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Actions
                 </th>
               </tr>
@@ -523,36 +547,36 @@ const Payouts = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPayouts.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan="8" className="px-3 sm:px-6 py-8 text-center text-gray-500 text-sm">
                     No payouts found
                   </td>
                 </tr>
               ) : (
                 filteredPayouts.map((payout) => (
                   <tr key={payout._id || payout.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{payout.payoutNumber}</div>
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm font-medium text-gray-900">{payout.payoutNumber}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{getAgentDisplay(payout)}</div>
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm text-gray-900">{getAgentDisplay(payout)}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{getFranchiseDisplay(payout)}</div>
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm text-gray-900">{getFranchiseDisplay(payout)}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm font-medium text-gray-900">
                         {formatInCrores(payout.totalAmount || 0)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm font-medium text-gray-900">
                         {formatInCrores(payout.netPayable || 0)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                       <StatusBadge status={payout.status} />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap hidden sm:table-cell">
                       {payout.bankPaymentReceipt?.url ? (
                         <a
                           href={payout.bankPaymentReceipt.url}
@@ -561,17 +585,17 @@ const Payouts = () => {
                           className="text-primary-900 hover:text-primary-800 flex items-center gap-1"
                         >
                           <FileText className="w-4 h-4" />
-                          <span className="text-sm">View</span>
+                          <span className="text-xs sm:text-sm">View</span>
                         </a>
                       ) : (
-                        <span className="text-sm text-gray-400">No receipt</span>
+                        <span className="text-xs sm:text-sm text-gray-400">No receipt</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-xs sm:text-sm font-medium">
+                      <div className="flex items-center justify-end gap-1 sm:gap-2">
                         <button
                           onClick={() => handleView(payout)}
-                          className="text-primary-900 hover:text-primary-800 p-1"
+                          className="text-primary-900 hover:text-primary-800 p-1 sm:p-1.5"
                           title="View Details"
                         >
                           <Eye className="w-4 h-4" />
@@ -579,7 +603,7 @@ const Payouts = () => {
                         {canEdit && (
                           <button
                             onClick={() => handleEdit(payout)}
-                            className="text-gray-600 hover:text-gray-900 p-1"
+                            className="text-gray-600 hover:text-gray-900 p-1 sm:p-1.5"
                             title="Edit"
                           >
                             <Edit className="w-4 h-4" />
@@ -588,7 +612,7 @@ const Payouts = () => {
                         {canDelete && (
                           <button
                             onClick={() => handleDeleteClick(payout)}
-                            className="text-red-600 hover:text-red-900 p-1"
+                            className="text-red-600 hover:text-red-900 p-1 sm:p-1.5"
                             title="Delete"
                           >
                             <Trash2 className="w-4 h-4" />

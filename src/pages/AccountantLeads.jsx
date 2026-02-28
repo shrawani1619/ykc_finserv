@@ -77,6 +77,7 @@ const AccountantLeads = () => {
         agent: '',
         dateRange: { from: '', to: '' }
     });
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
     const [formData, setFormData] = useState({
         amount: '',
@@ -467,277 +468,282 @@ const AccountantLeads = () => {
     const uniqueStatuses = getUniqueValues(leads, 'status');
 
     return (
-        <div className="bg-white rounded-3xl border border-gray-200 shadow-sm flex flex-col h-[calc(100vh-100px)] w-full max-w-full overflow-hidden">
+        <>
+        <div className="bg-white rounded-lg sm:rounded-3xl border border-gray-200 shadow-sm flex flex-col h-[calc(100vh-100px)] sm:h-[calc(100vh-120px)] w-full max-w-full overflow-hidden">
             {/* Header */}
-            <div className="p-4 border-b border-gray-100 flex flex-col gap-4 shrink-0">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="p-3 sm:p-4 border-b border-gray-100 flex flex-col gap-3 sm:gap-4 shrink-0">
+                <div className="flex flex-col gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Approved Loan Leads</h1>
-                        <p className="text-sm text-gray-500">Manage disbursements and calculate commissions</p>
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Approved Loan Leads</h1>
+                        <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage disbursements and calculate commissions</p>
                     </div>
-                    <div className="flex flex-wrap gap-3 w-full sm:w-auto">
-                        <div className="relative flex-1 sm:flex-none min-w-[200px]">
+                    
+                    {/* Search and Export */}
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                        <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
                                 placeholder="Search by name, ID, account..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
+                                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg sm:rounded-xl text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all"
                             />
                         </div>
-                        <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm whitespace-nowrap">
+                        <button className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg sm:rounded-xl text-sm font-medium sm:font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm whitespace-nowrap">
                             <FileDown size={18} />
-                            Export
+                            <span>Export</span>
                         </button>
-                        {loading && <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-900"></div>}
                     </div>
                 </div>
                 
-                {/* Filter Section */}
-                <div className="flex flex-wrap gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <div className="flex-1 min-w-[150px]">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                {/* Filter Section - Collapsible */}
+                <div className="border-t border-gray-200 pt-3">
+                    <button
+                        onClick={() => setFiltersOpen(!filtersOpen)}
+                        className="flex items-center justify-between w-full text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                    >
+                        <span className="flex items-center gap-2">
+                            <Filter size={16} />
+                            Filters
+                        </span>
+                        {filtersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                    {filtersOpen && (
+                        <div className="flex flex-col sm:flex-row flex-wrap gap-3 p-3 sm:p-4 bg-gray-50 rounded-lg sm:rounded-xl border border-gray-200 mt-3">
+                    <div className="flex-1 min-w-[140px] sm:min-w-[150px]">
+                        <label className="block text-xs font-medium text-gray-700 mb-1.5">Status</label>
+                        <div className="relative">
                         <select
                             value={filters.status}
                             onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none"
+                                className="w-full px-3 py-2 pr-8 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none appearance-none bg-white"
                         >
                             <option value="">All Statuses</option>
                             {uniqueStatuses.map(status => (
                                 <option key={status} value={status}>{status}</option>
                             ))}
                         </select>
+                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                        </div>
                     </div>
                     
-                    <div className="flex-1 min-w-[150px]">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Bank</label>
+                    <div className="flex-1 min-w-[140px] sm:min-w-[150px]">
+                        <label className="block text-xs font-medium text-gray-700 mb-1.5">Bank</label>
+                        <div className="relative">
                         <select
                             value={filters.bank}
                             onChange={(e) => setFilters(prev => ({ ...prev, bank: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none"
+                                className="w-full px-3 py-2 pr-8 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none appearance-none bg-white"
                         >
                             <option value="">All Banks</option>
                             {uniqueBanks.map(bank => (
                                 <option key={bank} value={bank}>{bank}</option>
                             ))}
                         </select>
+                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                        </div>
                     </div>
                     
-                    <div className="flex-1 min-w-[150px]">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Agent</label>
+                    <div className="flex-1 min-w-[140px] sm:min-w-[150px]">
+                        <label className="block text-xs font-medium text-gray-700 mb-1.5">Agent</label>
+                        <div className="relative">
                         <select
                             value={filters.agent}
                             onChange={(e) => setFilters(prev => ({ ...prev, agent: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none"
+                                className="w-full px-3 py-2 pr-8 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none appearance-none bg-white"
                         >
                             <option value="">All Agents</option>
                             {uniqueAgents.map(agent => (
                                 <option key={agent} value={agent}>{agent}</option>
                             ))}
                         </select>
+                            <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                        </div>
                     </div>
                     
-                    <div className="flex items-end gap-2 w-full sm:w-auto">
+                    <div className="flex items-center justify-center w-full sm:w-auto sm:items-end">
                         <button
                             onClick={() => setFilters({ status: '', bank: '', agent: '', dateRange: { from: '', to: '' } })}
-                            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors w-full sm:w-auto"
+                            className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
                         >
                             Clear All
                         </button>
                     </div>
+                        </div>
+                    )}
                 </div>
                 
                 {/* Results Summary */}
-                <div className="text-sm text-gray-600">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t border-gray-200">
+                    <div className="text-xs sm:text-sm text-gray-600">
                     Showing {filteredAndSortedLeads.length} of {leads.length} leads
-                    {searchTerm && ` matching "${searchTerm}"`}
-                    {filters.status && ` with status "${filters.status}"`}
-                    {filters.bank && ` from bank "${filters.bank}"`}
-                    {filters.agent && ` for agent "${filters.agent}"`}
                 </div>
+                    <div className="text-xs sm:text-sm text-gray-600">
+                        Showing 1 to {filteredAndSortedLeads.length} of {leads.length} entries
             </div>
-
-            {/* Main Content Area */}
-            <div className="flex-1 overflow-auto bg-gray-50/50">
-                {/* Search and Filters */}
-                <div className="p-6 bg-white border-b border-gray-100 flex flex-wrap gap-4 items-center">
-                    <div className="relative flex-1 min-w-[200px]">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Search by Name or Mobile..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 outline-none transition-all placeholder:text-gray-400"
-                        />
                     </div>
                 </div>
 
-                {/* Main Table Container */}
-                <div className="flex-1 overflow-hidden relative flex flex-col w-full">
-                    <div className="w-full h-full overflow-auto bg-white [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.400)_theme(colors.slate.100)] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:bg-slate-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-slate-100 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500 md:[&::-webkit-scrollbar]:w-2 md:[&::-webkit-scrollbar]:h-2 sm:[&::-webkit-scrollbar]:w-2 sm:[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2">
-                        <table className="w-full text-left border-collapse min-w-[100px]">
-                            <thead className="bg-gray-50/80 backdrop-blur-sm sticky top-0 z-10 shadow-sm">
-                                <tr className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
-                                    <th className="px-6 py-4 whitespace-nowrap min-w-[60px]"></th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+            {/* Main Content Area - Table */}
+            <div className="flex-1 overflow-hidden bg-white">
+                <div className="w-full h-full overflow-x-auto overflow-y-auto table-wrapper">
+                    <table className="w-full text-left border-collapse min-w-[2000px]">
+                        <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                                <tr className="text-[10px] sm:text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[40px] sm:min-w-[60px]"></th>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[100px]">
                                         <div className="flex items-center gap-2">
                                             <span>Lead ID</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[150px]">
                                         <div className="flex items-center gap-2">
                                             <span>Customer</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('status')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[100px] cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('status')}>
                                         <div className="flex items-center gap-2">
                                             <span>Status</span>
-
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[120px]">
                                         <div className="flex items-center gap-2">
                                             <span>Account No</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('loanType')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[100px] cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('loanType')}>
                                         <div className="flex items-center gap-2">
                                             <span>Loan Type</span>
-
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap text-right">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[120px] text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Loan Amount</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap text-right">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[120px] text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Disbursed</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('remainingAmount')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[120px] cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('remainingAmount')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Remaining</span>
-
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('agentCommissionPercentage')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[100px] cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('agentCommissionPercentage')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Agent Comm %</span>
-
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('agentCommissionAmount')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap min-w-[120px] cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('agentCommissionAmount')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Agent Comm AMT</span>
-
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('subAgentCommissionPercentage')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('subAgentCommissionPercentage')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Sub Agent Comm %</span>
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('subAgentCommissionAmount')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('subAgentCommissionAmount')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Sub Agent Comm AMT</span>
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('commissionPercentage')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('commissionPercentage')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Associated Comm %</span>
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('commissionAmount')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('commissionAmount')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Associated Comm AMT</span>
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('referralFranchiseCommissionPercentage')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('referralFranchiseCommissionPercentage')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Refer Associated Comm %</span>
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('referralFranchiseCommissionAmount')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors text-right" onClick={() => handleSort('referralFranchiseCommissionAmount')}>
                                         <div className="flex items-center justify-end gap-2">
                                             <span>Refer Associated Comm AMT</span>
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <span>Agent</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <span>SubAgent</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <span>Associated</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <span>Referral Associated</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('bank.name')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('bank.name')}>
                                         <div className="flex items-center gap-2">
                                             <span>Bank</span>
 
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <span>SM/BM</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <span>ASM</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('branch')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('branch')}>
                                         <div className="flex items-center gap-2">
                                             <span>Branch</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('disbursementDate')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('disbursementDate')}>
                                         <div className="flex items-center gap-2">
                                             <span>Disbursement Date</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('sanctionedDate')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('sanctionedDate')}>
                                         <div className="flex items-center gap-2">
                                             <span>Sanctioned Date</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <span>Date</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">Remark</th>
-                                    <th className="px-6 py-4 whitespace-nowrap">GST</th>
-                                    <th className="px-6 py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('codeUse')}>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">Remark</th>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">GST</th>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('codeUse')}>
                                         <div className="flex items-center gap-2">
                                             <span>DSA Code</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 whitespace-nowrap">UTR Number</th>
-                                    <th className="px-6 py-4 whitespace-nowrap">Generate Invoice</th>
-                                    <th className="px-6 py-4 whitespace-nowrap">Actions</th>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">UTR Number</th>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">Generate Invoice</th>
+                                    <th className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 bg-white">
@@ -756,13 +762,13 @@ const AccountantLeads = () => {
                                                 className={`transition-all duration-300 hover:bg-gray-50 cursor-pointer group ${isExpanded ? 'bg-gray-50 shadow-sm' : ''}`}
                                                 onClick={() => toggleRow(lead._id)}
                                             >
-                                                <td className="px-6 py-4 whitespace-nowrap text-gray-400 group-hover:text-primary-600 transition-colors">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-gray-400 group-hover:text-primary-600 transition-colors">
                                                     {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500 font-medium">
-                                                    {lead.leadId}
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs font-mono text-gray-500 font-medium">
+                                                    {lead.leadId || lead.caseNumber || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center font-bold text-xs">
                                                             {(lead.customerName || 'U').charAt(0)}
@@ -773,95 +779,95 @@ const AccountantLeads = () => {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(loanStatus)}`}>
                                                         {loanStatus}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs font-mono text-gray-600">
                                                     {lead.loanAccountNo || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
+                                                    <div className="text-xs sm:text-sm font-medium text-gray-900">
                                                         {lead.loanType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right font-mono">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-bold text-gray-900 text-right font-mono">
                                                     {formatCurrency(lead.loanAmount || lead.amount)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-emerald-600 text-right font-mono">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-bold text-emerald-600 text-right font-mono">
                                                     {formatCurrency(disbursedAmount)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-orange-600 text-right font-mono">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-orange-600 text-right font-mono">
                                                     {formatCurrency(remainingAmount)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-blue-600 text-right">
                                                     {(() => {
                                                         const percentage = lead.agentCommissionPercentage || 0;
                                                         return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
                                                     })()}%
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-bold text-blue-600 text-right font-mono">
                                                     {formatCurrency(lead.agentCommissionAmount || 0)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-blue-600 text-right">
                                                     {(() => {
                                                         const percentage = lead.subAgentCommissionPercentage || 0;
                                                         return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
                                                     })()}%
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-bold text-blue-600 text-right font-mono">
                                                     {formatCurrency(lead.subAgentCommissionAmount || 0)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-blue-600 text-right">
                                                     {(() => {
                                                         const percentage = lead.commissionPercentage || 0;
                                                         return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
                                                     })()}%
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-bold text-blue-600 text-right font-mono">
                                                     {formatCurrency(lead.commissionAmount || 0)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 text-right">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-blue-600 text-right">
                                                     {(() => {
                                                         const percentage = lead.referralFranchiseCommissionPercentage || 0;
                                                         return typeof percentage === 'number' ? percentage.toFixed(2) : parseFloat(percentage || 0).toFixed(2);
                                                     })()}%
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 text-right font-mono">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-bold text-blue-600 text-right font-mono">
                                                     {formatCurrency(lead.referralFranchiseCommissionAmount || 0)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.agentName || lead.agent?.name || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.subAgentName || lead.subAgent?.name || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.associated?.name || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.referralFranchise?.name || lead.referralAssociated?.name || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.bank?.name || lead.bankName || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.smBm?.name || lead.smBmName || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.asm?.name || lead.asmName || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                                                     {lead.branch || 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
                                                     {lead.disbursementDate ? new Date(lead.disbursementDate).toLocaleDateString() : 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
                                                     {lead.sanctionedDate ? new Date(lead.sanctionedDate).toLocaleDateString() : 'N/A'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
                                                     {new Date(lead.createdAt).toLocaleDateString()}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-[120px] truncate">
@@ -869,10 +875,10 @@ const AccountantLeads = () => {
                                                         {lead.remarks || lead.remark || 'N/A'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500">
                                                     {formatCurrency(lead.gst || 0)}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap text-xs font-mono text-gray-500">
                                                     {lead.codeUse || lead.dsaCode || 'N/A'}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-500 max-w-[100px] truncate">
@@ -880,7 +886,7 @@ const AccountantLeads = () => {
                                                         {lead.utrNumber || 'N/A'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                                     {(() => {
                                                         // For disbursed status: Check if agent invoice exists
                                                         if (lead.status === 'disbursed') {
@@ -1008,7 +1014,7 @@ const AccountantLeads = () => {
                                                         );
                                                     })()}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 whitespace-nowrap">
                                                     <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                                                         <button
                                                             onClick={() => openViewModal(lead._id)}
@@ -1082,16 +1088,29 @@ const AccountantLeads = () => {
                     </div>
 
                     {/* Pagination */}
-                    <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-white shrink-0">
-                        <p className="text-sm text-gray-500">Showing 1 to {filteredAndSortedLeads.length} of {filteredAndSortedLeads.length} entries</p>
-                        <div className="flex gap-2">
-                            <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50" disabled>Previous</button>
-                            <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50" disabled>Next</button>
+                    <div className="p-3 sm:p-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                        <div className="text-xs sm:text-sm text-gray-600 order-2 sm:order-1">
+                            Showing 1 to {filteredAndSortedLeads.length} of {leads.length} entries
+                        </div>
+                        <div className="flex items-center gap-2 order-1 sm:order-2">
+                            <button 
+                                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-400 bg-gray-100 rounded-lg cursor-not-allowed disabled:opacity-50" 
+                                disabled
+                            >
+                                Previous
+                            </button>
+                            <button 
+                                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-400 bg-gray-100 rounded-lg cursor-not-allowed disabled:opacity-50" 
+                                disabled
+                            >
+                                Next
+                            </button>
+                        </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Edit Disbursement Form Modal */}
+            {/* Modals - Outside main container */}
                 <EditDisbursementForm
                     isOpen={isEditDisbursementModalOpen}
                     onClose={() => {
@@ -1348,9 +1367,7 @@ const AccountantLeads = () => {
                     }}
                     leadId={selectedLeadForEmail?._id || selectedLeadForEmail?.id}
                 />
-
-            </div>
-        </div>
+        </>
     );
 };
 

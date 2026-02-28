@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import logo from '/logo.webp'
 import { authService } from '../services/auth.service'
@@ -21,17 +21,34 @@ import {
   Ticket,
   UserCog,
   Percent,
-  Wallet
+  Wallet,
+  X
 } from 'lucide-react'
 
-const Sidebar = ({ onMinimizeChange }) => {
+const Sidebar = ({ onMinimizeChange, isMobile = false, isOpen = false, onClose }) => {
   const [isMinimized, setIsMinimized] = useState(false)
 
+  useEffect(() => {
+    if (isMobile) {
+      setIsMinimized(false)
+    }
+  }, [isMobile])
+
   const handleToggle = () => {
+    if (isMobile) {
+      onClose?.()
+      return
+    }
     const newState = !isMinimized
     setIsMinimized(newState)
     if (onMinimizeChange) {
       onMinimizeChange(newState)
+    }
+  }
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      onClose?.()
     }
   }
 
@@ -66,14 +83,28 @@ const Sidebar = ({ onMinimizeChange }) => {
   ]
 
   return (
-    <div className={`bg-white border-r border-gray-200 h-screen fixed left-0 top-0 z-[90] shadow-sm sidebar-transition ${isMinimized ? 'w-20' : 'w-64'}`}>
+    <div className={`bg-white border-r border-gray-200 h-screen fixed left-0 top-0 z-[90] shadow-sm sidebar-transition ${
+      isMobile 
+        ? `${isOpen ? 'translate-x-0' : '-translate-x-full'} w-64` 
+        : `${isMinimized ? 'w-20' : 'w-64'}`
+    }`}>
       {/* Minimize Toggle */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        {!isMinimized && (
-          <div >
-            <img src={logo} alt="YKC CRM" className='boject-contain' />
+        {(!isMinimized || isMobile) && (
+          <div>
+            <img src={logo} alt="YKC CRM" className="object-contain max-h-10" />
           </div>
         )}
+        <div className="flex items-center gap-2">
+          {isMobile && (
+            <button
+              onClick={handleToggle}
+              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
+          )}
+          {!isMobile && (
         <button
           onClick={handleToggle}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -84,6 +115,8 @@ const Sidebar = ({ onMinimizeChange }) => {
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           )}
         </button>
+          )}
+        </div>
       </div>
 
       {/* Navigation */}
@@ -101,16 +134,17 @@ const Sidebar = ({ onMinimizeChange }) => {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  onClick={handleLinkClick}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive
                       ? 'bg-primary-50 text-primary-900 font-medium'
                       : 'text-gray-700 hover:bg-gray-50'
                     }`
                   }
-                  title={isMinimized ? item.label : ''}
+                  title={isMinimized && !isMobile ? item.label : ''}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
-                  {!isMinimized && <span className="text-sm">{item.label}</span>}
+                  {(!isMinimized || isMobile) && <span className="text-sm">{item.label}</span>}
                 </NavLink>
               )
             })}
@@ -131,16 +165,17 @@ const Sidebar = ({ onMinimizeChange }) => {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  onClick={handleLinkClick}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive
                       ? 'bg-primary-50 text-primary-900 font-medium'
                       : 'text-gray-700 hover:bg-gray-50'
                     }`
                   }
-                  title={isMinimized ? item.label : ''}
+                  title={isMinimized && !isMobile ? item.label : ''}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
-                  {!isMinimized && <span className="text-sm">{item.label}</span>}
+                  {(!isMinimized || isMobile) && <span className="text-sm">{item.label}</span>}
                 </NavLink>
               )
             })}

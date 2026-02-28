@@ -228,8 +228,23 @@ const SubAgents = () => {
         </button>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Compact Summary Bar - Mobile Only */}
+      <div className="md:hidden bg-gradient-to-r from-gray-50 to-white rounded-lg shadow-sm border border-gray-200 px-4 py-3.5">
+        <div className="flex items-center justify-between text-xs sm:text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Total</span>
+            <span className="font-bold text-gray-900">{totalSubAgents}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Active</span>
+            <span className="font-bold text-green-600">{activeSubAgents}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Statistics Cards - Desktop Only */}
+      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-6">
         <StatCard
           title="Total Sub Agents"
           value={totalSubAgents}
@@ -244,8 +259,8 @@ const SubAgents = () => {
         />
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      {/* Filters - Sticky on Mobile */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:relative sticky top-0 z-20 md:z-auto md:shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>

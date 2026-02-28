@@ -247,16 +247,36 @@ const RegionalManagers = () => {
         </button>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Compact Summary Bar - Mobile Only */}
+      <div className="md:hidden bg-gradient-to-r from-gray-50 to-white rounded-lg shadow-sm border border-gray-200 px-4 py-3.5">
+        <div className="flex items-center justify-between text-xs sm:text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Total</span>
+            <span className="font-bold text-gray-900">{kpis.total}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Active</span>
+            <span className="font-bold text-green-600">{kpis.active}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Franchises</span>
+            <span className="font-bold text-orange-600">{kpis.franchisesCovered}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs - Desktop Only */}
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Regional Managers" value={kpis.total} icon={Users} color="blue" />
         <StatCard title="Active" value={kpis.active} icon={MapPin} color="green" />
         <StatCard title="Franchises Covered" value={kpis.franchisesCovered} icon={Building2} color="purple" />
         <StatCard title="Unassigned" value={kpis.withoutFranchises} icon={MapPin} color="orange" />
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+      {/* Filters - Sticky on Mobile */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden md:relative sticky top-0 z-20 md:z-auto md:shadow-sm">
         <button
           type="button"
           onClick={() => setFiltersOpen((o) => !o)}

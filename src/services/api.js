@@ -380,8 +380,8 @@ export const api = {
       }
       // Otherwise, send as JSON
       return apiRequest('/payouts', {
-        method: 'POST',
-        body: JSON.stringify(data),
+      method: 'POST',
+      body: JSON.stringify(data),
       });
     },
     update: (id, data) => {
@@ -402,8 +402,8 @@ export const api = {
         });
       }
       return apiRequest(`/payouts/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
+      method: 'PUT',
+      body: JSON.stringify(data),
       });
     },
     delete: (id) => apiRequest(`/payouts/${id}`, { method: 'DELETE' }),

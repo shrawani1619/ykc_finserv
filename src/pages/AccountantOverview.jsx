@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-    TrendingUp,
-    DollarSign,
-    UserCheck,
-    FileText,
-    Building2,
-    Users,
+    Filter,
+    ChevronDown,
+    ChevronUp,
+    Search,
+    ArrowUpDown,
 } from 'lucide-react';
 import {
     ResponsiveContainer,
@@ -19,7 +18,6 @@ import {
     YAxis,
     Tooltip,
 } from 'recharts';
-import StatCard from '../components/StatCard';
 import api from '../services/api';
 import { formatInCrores } from '../utils/formatUtils';
 
@@ -27,9 +25,15 @@ const AccountantOverview = () => {
     const [dashboardData, setDashboardData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [funnelFilter, setFunnelFilter] = useState('monthly'); // 'weekly', 'monthly', 'yearly'
+    const [filtersOpen, setFiltersOpen] = useState(false); // Start with filters collapsed
+    const [agents, setAgents] = useState([]);
+    const [agentsLoading, setAgentsLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
     useEffect(() => {
         fetchDashboard();
+        fetchAgents();
     }, [funnelFilter]);
 
     const fetchDashboard = async () => {
@@ -46,6 +50,104 @@ const AccountantOverview = () => {
             setLoading(false);
         }
     };
+
+    const fetchAgents = async () => {
+        try {
+            setAgentsLoading(true);
+            const response = await api.agents.getAll();
+            const agentsData = response.data || response || [];
+            setAgents(Array.isArray(agentsData) ? agentsData : []);
+        } catch (error) {
+            console.error('Error fetching agents:', error);
+            setAgents([]);
+        } finally {
+            setAgentsLoading(false);
+        }
+    };
+
+    const getAssociatedName = (agent) => {
+        if (!agent) return 'N/A';
+        if (agent.managedByModel === 'RelationshipManager') {
+            return agent.managedBy?.name || 'N/A';
+        }
+        if (agent.managedByModel === 'Franchise') {
+            return agent.managedBy?.name || 'N/A';
+        }
+        if (agent.managedBy && typeof agent.managedBy === 'object' && agent.managedBy.name) {
+            return agent.managedBy.name;
+        }
+        if (agent.franchise && (agent.franchise.name || agent.franchise._id || agent.franchise.id)) {
+            return agent.franchise?.name || 'N/A';
+        }
+        return 'N/A';
+    };
+
+    const getAssociatedDisplay = (agent) => {
+        const name = getAssociatedName(agent);
+        if (name === 'N/A') return 'N/A';
+        // Return abbreviation: first 2 characters if it's a franchise, or first 2 chars + number if RM
+        if (agent.managedByModel === 'Franchise') {
+            return name.substring(0, 2).toUpperCase();
+        }
+        if (agent.managedByModel === 'RelationshipManager') {
+            return name.toLowerCase().replace(/\d+/g, '').substring(0, 2) + (name.match(/\d+/) ? name.match(/\d+/)[0] : '');
+        }
+        return name.substring(0, 2).toUpperCase();
+    };
+
+    const handleSort = (key) => {
+        setSortConfig(prevConfig => {
+            if (prevConfig.key === key) {
+                return {
+                    key,
+                    direction: prevConfig.direction === 'asc' ? 'desc' : 'asc'
+                };
+            }
+            return { key, direction: 'asc' };
+        });
+    };
+
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) {
+            return <ArrowUpDown className="w-3 h-3 text-gray-400" />;
+        }
+        return sortConfig.direction === 'asc' 
+            ? <ArrowUpDown className="w-3 h-3 text-primary-900" />
+            : <ArrowUpDown className="w-3 h-3 text-primary-900 rotate-180" />;
+    };
+
+    // Filter and sort agents
+    const filteredAndSortedAgents = React.useMemo(() => {
+        let filtered = agents.filter(agent => {
+            if (!agent) return false;
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = 
+                (agent.name && agent.name.toLowerCase().includes(searchLower)) ||
+                (agent.email && agent.email.toLowerCase().includes(searchLower)) ||
+                (agent.mobile && agent.mobile.includes(searchTerm));
+            return matchesSearch;
+        });
+
+        if (sortConfig.key) {
+            filtered.sort((a, b) => {
+                let aVal, bVal;
+                if (sortConfig.key === 'name') {
+                    aVal = a.name || '';
+                    bVal = b.name || '';
+                } else {
+                    aVal = a[sortConfig.key] || '';
+                    bVal = b[sortConfig.key] || '';
+                }
+                if (sortConfig.direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+        }
+
+        return filtered;
+    }, [agents, searchTerm, sortConfig]);
 
     if (loading || !dashboardData) {
         return (
@@ -86,33 +188,107 @@ const AccountantOverview = () => {
                 <span className="text-gray-900 font-medium">Analytics</span>
             </div>
 
-            {/* Stats Grid */}
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                <StatCard
-                    title="Active Franchises"
-                    value={totalFranchises.toString()}
-                    icon={Building2}
-                    color="teal"
+            {/* Filter Section */}
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm">
+                <button
+                    onClick={() => setFiltersOpen(!filtersOpen)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                >
+                    <div className="flex items-center gap-2">
+                        <Filter className="w-5 h-5 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-900">Filter options</span>
+                    </div>
+                    {filtersOpen ? (
+                        <ChevronUp className="w-5 h-5 text-gray-600" />
+                    ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-600" />
+                    )}
+                </button>
+                {filtersOpen && (
+                    <div className="px-4 pb-4 border-t border-gray-100">
+                        <div className="pt-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search by name, email, or mobile..."
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                 />
-                <StatCard
-                    title="Active Relationship Managers"
-                    value={activeRelationshipManagers.toString()}
-                    icon={Users}
-                    color="indigo"
-                />
-                <StatCard
-                    title="Active Agents"
-                    value={activeAgents.toString()}
-                    icon={UserCheck}
-                    color="green"
-                />
-                <StatCard
-                    title="Total Revenue"
-                    value={`₹${(totalRevenue / 1000).toFixed(1)}K`}
-                    icon={DollarSign}
-                    color="purple"
-                />
-            </section>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Agents List */}
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th
+                                        className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                        onClick={() => handleSort('name')}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            NAME
+                                            {getSortIcon('name')}
+                                        </div>
+                                    </th>
+                                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        CONTACT
+                                    </th>
+                                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        ASSO
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {agentsLoading ? (
+                                    <tr>
+                                        <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
+                                            Loading...
+                                        </td>
+                                    </tr>
+                                ) : filteredAndSortedAgents.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
+                                            No agents found
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredAndSortedAgents.map((agent, index) => {
+                                        const agentId = agent.id || agent._id;
+                                        return (
+                                            <tr key={agentId || `agent-${index}`} className="hover:bg-gray-50">
+                                                <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-900">{agent.name || 'N/A'}</div>
+                                                </td>
+                                                <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">{agent.email || 'N/A'}</div>
+                                                    {agent.mobile && (
+                                                        <div className="text-xs text-gray-500">{agent.mobile}</div>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">{getAssociatedDisplay(agent)}</div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    {!agentsLoading && filteredAndSortedAgents.length > 0 && (
+                        <div className="px-4 sm:px-6 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
+                            Showing {filteredAndSortedAgents.length} of {agents.length} agents
+                        </div>
+                    )}
+                </div>
 
             {/* Middle Section: Chart and Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

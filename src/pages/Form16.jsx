@@ -191,13 +191,21 @@ const Form16 = () => {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Form 16 / TDS</h1>
-          <p className="text-sm text-gray-600 mt-1">Manage Form 16 and TDS documents</p>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
+      {/* Header */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Form 16 / TDS</h1>
+              {/* Compact Inline Badge - Mobile Only */}
+              <span className="md:hidden inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {totalForms} records
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">Manage Form 16 and TDS documents</p>
+          </div>
+          {/* Export Button - Desktop Only */}
           <button
             onClick={() => {
               const rows = sortedForms.map((f) => ({
@@ -210,34 +218,39 @@ const Form16 = () => {
               toast.success('Export', `Exported ${rows.length} records to Excel`)
             }}
             disabled={sortedForms.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="hidden md:flex items-center gap-2 px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileDown className="w-5 h-5" />
             <span>Export to Excel</span>
           </button>
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Create Form 16</span>
-          </button>
         </div>
+        
+        {/* Primary Action Button - Full Width on Mobile */}
+        <button
+          onClick={handleCreate}
+          className="w-full md:w-auto md:ml-auto flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span>Create Form 16</span>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Statistics Cards - Desktop Only */}
+      <div className="hidden md:grid grid-cols-1 md:grid-cols-2 gap-6">
         <StatCard title="Total Records" value={totalForms} icon={FileText} color="blue" />
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Filters - Collapsible Accordion */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden md:relative sticky top-0 z-20 md:z-auto md:shadow-sm">
         <button
           type="button"
           onClick={() => setFiltersOpen((o) => !o)}
           className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
         >
-          <span className="flex items-center gap-2 font-medium text-gray-900">
-            <Filter className="w-5 h-5 text-gray-500" />
-            Filter options
+          <span className="flex items-center gap-2 font-medium text-gray-900 text-sm">
+            <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+            <span className="hidden sm:inline">Filter options</span>
+            <span className="sm:hidden">Filters</span>
             {hasActiveFilters && (
               <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">
                 Active
@@ -245,21 +258,21 @@ const Form16 = () => {
             )}
           </span>
           {filtersOpen ? (
-            <ChevronUp className="w-5 h-5 text-gray-500" />
+            <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
           ) : (
-            <ChevronDown className="w-5 h-5 text-gray-500" />
+            <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
           )}
         </button>
         {filtersOpen && (
           <div className="border-t border-gray-200 p-4 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Search</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Attachment name, file name, form type..."
+                    placeholder="Attachment name, file name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
@@ -267,7 +280,7 @@ const Form16 = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Attachment Date
                 </label>
                 <input
@@ -296,7 +309,8 @@ const Form16 = () => {
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Desktop Table View */}
+      <div className="hidden md:block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -395,6 +409,86 @@ const Form16 = () => {
         {sortedForms.length > 0 && (
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
             <p className="text-sm text-gray-600">
+              Showing <span className="font-medium">{sortedForms.length}</span> of{' '}
+              <span className="font-medium">{sortedForms.length}</span> records
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <p className="text-sm text-gray-500">Loading...</p>
+          </div>
+        ) : sortedForms.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <p className="text-sm text-gray-500">No records found</p>
+          </div>
+        ) : (
+          sortedForms.map((form) => (
+            <div
+              key={form.id || form._id}
+              className="bg-white rounded-lg border border-gray-200 p-4 space-y-3"
+            >
+              {/* Card Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="text-xs text-gray-500">
+                      {formatDate(form.attachmentDate)}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-gray-900 truncate">
+                    {form.attachmentName || 'N/A'}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handleView(form)}
+                    className="p-1.5 text-primary-900 hover:bg-primary-50 rounded"
+                    title="View"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleEdit(form)}
+                    className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+                    title="Edit"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(form)}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Card Details */}
+              <div className="pt-2 border-t border-gray-100">
+                <div className="space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-gray-500 min-w-[80px]">File Name:</span>
+                    <span className="text-xs text-gray-900 flex-1 break-words">
+                      {form.fileName || 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+        
+        {/* Mobile Summary */}
+        {sortedForms.length > 0 && (
+          <div className="bg-gray-50 rounded-lg border border-gray-200 px-4 py-2.5">
+            <p className="text-xs text-gray-600 text-center">
               Showing <span className="font-medium">{sortedForms.length}</span> of{' '}
               <span className="font-medium">{sortedForms.length}</span> records
             </p>

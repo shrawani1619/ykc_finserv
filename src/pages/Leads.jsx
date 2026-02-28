@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Copy, Settings2, History, X, FileDown, CheckCircle } from 'lucide-react'
+import { Plus, Search, Filter, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Copy, Settings2, History, X, FileDown, CheckCircle, FileText } from 'lucide-react'
 import api from '../services/api'
 import { authService } from '../services/auth.service'
 import StatusBadge from '../components/StatusBadge'
@@ -1112,14 +1112,15 @@ const Leads = () => {
   ]
 
   return (
-    <div className="flex flex-col h-full w-full max-w-full overflow-x-hidden min-h-0">
+    <div className="flex flex-col w-full max-w-full overflow-x-hidden min-h-0 px-4 md:px-0">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leads Management</h1>
-          <p className="text-sm text-gray-600 mt-1">Manage and track all loan leads</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 md:mb-6 flex-shrink-0 gap-3 md:gap-0">
+        <div className="flex-1">
+          <h1 className="text-[20px] md:text-2xl font-bold text-gray-900 leading-tight">Leads Management</h1>
+          <p className="text-xs md:text-sm text-gray-600 mt-1">Manage and track all loan leads</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* Action buttons - stacked below description on mobile, full-width Create Lead */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-2">
           {canExportData() && (
             <button
               onClick={() => {
@@ -1155,19 +1156,20 @@ const Leads = () => {
             }}
             disabled={sortedLeads.length === 0}
             title="Export currently filtered data to Excel"
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 min-h-[48px] md:min-h-0 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            <FileDown className="w-5 h-5" />
-            <span>Export to Excel</span>
+            <FileDown className="w-4 h-4" />
+            <span className="hidden sm:inline">Export to Excel</span>
+            <span className="sm:hidden">Export</span>
           </button>
           )}
           <div className="relative">
             <button
               data-column-settings-button
               onClick={() => setShowColumnSettings(!showColumnSettings)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 min-h-[48px] md:min-h-0 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
             >
-              <Settings2 className="w-5 h-5" />
+              <Settings2 className="w-4 h-4" />
               <span>Columns</span>
             </button>
             {showColumnSettings && (
@@ -1229,9 +1231,9 @@ const Leads = () => {
           {canCreate && (
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+              className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2.5 md:py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors text-sm font-medium min-h-[48px] md:min-h-0"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 md:w-5 md:h-5" />
               <span>Create Lead</span>
             </button>
           )}
@@ -1239,26 +1241,28 @@ const Leads = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-6">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-4 md:mb-6 flex-shrink-0 w-full">
         <button
           type="button"
           onClick={() => setFiltersOpen((o) => !o)}
-          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors min-h-[48px] md:min-h-0"
         >
-          <span className="flex items-center gap-2 font-medium text-gray-900">
-            <Filter className="w-5 h-5 text-gray-500" />
+          <span className="flex items-center gap-2 font-medium text-gray-900 text-sm md:text-base">
+            <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-500 flex-shrink-0" />
             Filter options
             {hasActiveFilters && (
               <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded-full">Active</span>
             )}
           </span>
-          {filtersOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+          <span className="flex items-center flex-shrink-0">
+            {filtersOpen ? <ChevronUp className="w-4 h-4 md:w-5 md:h-5 text-gray-500" /> : <ChevronDown className="w-4 h-4 md:w-5 md:h-5 text-gray-500" />}
+          </span>
         </button>
         {filtersOpen && (
           <div className="border-t border-gray-200 p-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">Search</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -1266,16 +1270,16 @@ const Leads = () => {
                     placeholder="Name, email, phone, account..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                    className="w-full pl-9 pr-3 py-2.5 md:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white"
+                  className="w-full px-3 py-2.5 md:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm bg-white appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzY2NjY2NiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')] bg-[length:12px_8px] bg-[right_12px_center] bg-no-repeat"
                 >
                   {statusOptions.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -1391,8 +1395,8 @@ const Leads = () => {
         )}
       </div>
 
-      {/* Table */}
-      <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
+      {/* Desktop Table */}
+      <div className="hidden md:flex flex-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex-col min-h-0">
         <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -2405,6 +2409,137 @@ const Leads = () => {
         )}
       </div>
 
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-4 mb-4 mt-1">
+        {loading ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+            <p className="mt-2 text-sm text-gray-500">Loading...</p>
+          </div>
+        ) : sortedLeads.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-sm text-gray-500">No leads found</p>
+          </div>
+        ) : (
+          sortedLeads.map((lead) => {
+            const getFieldValue = (col) => {
+              switch (col.key) {
+                case 'customerName':
+                  return lead.customerName || 'N/A'
+                case 'loanType':
+                  return lead.loanType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'
+                case 'loanAmount':
+                  return `₹${(lead.loanAmount || lead.amount || 0).toLocaleString()}`
+                case 'disbursedAmount':
+                  return `₹${(lead.disbursedAmount || 0).toLocaleString()}`
+                case 'status':
+                  return lead.status || 'logged'
+                case 'bank':
+                  return lead.bank?.name || getBankName(lead.bankId || lead.bank) || 'N/A'
+                case 'loanAccountNo':
+                  return lead.loanAccountNo || 'N/A'
+                default:
+                  return 'N/A'
+              }
+            }
+
+            const primaryColumns = visibleColumns.filter(col => 
+              ['customerName', 'loanType', 'loanAmount', 'status'].includes(col.key)
+            )
+            const secondaryColumns = visibleColumns.filter(col => 
+              !['customerName', 'loanType', 'loanAmount', 'status', 'actions'].includes(col.key) && col.visible
+            ).slice(0, 4) // Limit to 4 secondary fields for mobile
+
+            return (
+              <div
+                key={lead.id || lead._id}
+                onClick={() => {
+                  setSelectedLead(lead)
+                  setIsDetailModalOpen(true)
+                }}
+                className="bg-white rounded-lg border border-gray-200 p-4 min-h-[48px] active:bg-gray-50 transition-colors cursor-pointer"
+              >
+                {/* Primary Info */}
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[20px] font-bold text-gray-900 truncate leading-tight">
+                        {lead.customerName || 'N/A'}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1 font-medium">
+                        {lead.loanType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0">
+                      <StatusBadge status={lead.status || 'logged'} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Secondary Info - Labels: smaller/lighter, Values: bold */}
+                <div className="pt-3 border-t border-gray-100 space-y-2.5">
+                  {secondaryColumns.map((col) => {
+                    const value = getFieldValue(col)
+                    if (value === 'N/A' || !value) return null
+                    return (
+                      <div key={col.key} className="flex items-center justify-between gap-2 min-h-[24px]">
+                        <span className="text-xs text-gray-500 font-normal flex-shrink-0">{col.label}</span>
+                        <span className="text-sm font-bold text-gray-900 text-right truncate">
+                          {col.key === 'loanAmount' || col.key === 'disbursedAmount' ? value : String(value)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Actions - improved touch spacing */}
+                {visibleColumns.some(col => col.key === 'actions') && (
+                  <div className="pt-3 border-t border-gray-100 mt-3 flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                    {canEdit && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedLead(lead)
+                            setIsEditModalOpen(true)
+                          }}
+                          className="text-gray-600 hover:text-gray-900 p-3 min-h-[48px] min-w-[48px] flex items-center justify-center rounded-lg active:bg-gray-100"
+                          title="Edit"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteClick(lead)
+                          }}
+                          className="text-red-600 hover:text-red-900 p-3 min-h-[48px] min-w-[48px] flex items-center justify-center rounded-lg active:bg-red-50"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedLead(lead)
+                            setIsDetailModalOpen(true)
+                          }}
+                          className="text-primary-600 hover:text-primary-900 p-3 min-h-[48px] min-w-[48px] flex items-center justify-center rounded-lg active:bg-primary-50"
+                          title="View"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+
       {/* Create Modal */}
       <Modal
         isOpen={isCreateModalOpen}
@@ -2551,21 +2686,6 @@ const Leads = () => {
                 <label className="text-sm font-medium text-gray-500">Agent Commission Amount</label>
                 <p className="mt-1 text-sm text-gray-900">
                   ₹{(selectedLead.agentCommissionAmount || selectedLead.commissionAmount || 0).toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Refer Franchise Commission %</label>
-                <p className="mt-1 text-sm text-gray-900">
-                  {(() => {
-                    const commission = selectedLead.referralFranchiseCommissionPercentage || 0;
-                    return typeof commission === 'number' ? commission.toFixed(2) + '%' : parseFloat(commission || 0).toFixed(2) + '%';
-                  })()}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">Refer Franchise Commission Amount</label>
-                <p className="mt-1 text-sm text-gray-900">
-                  ₹{(selectedLead.referralFranchiseCommissionAmount || 0).toLocaleString()}
                 </p>
               </div>
               <div>

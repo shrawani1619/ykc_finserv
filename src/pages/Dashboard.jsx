@@ -230,7 +230,7 @@ const Dashboard = () => {
       {isAgent ? (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             <StatCard
               title="Total Leads"
               value={stats.totalLeads || 0}
@@ -259,23 +259,23 @@ const Dashboard = () => {
 
           {/* Raise Payout Invoices Section */}
           {agentData.completedLeadsWithoutInvoices.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Raise Payout Invoices</h2>
-                <span className="text-sm text-gray-600">{agentData.completedLeadsWithoutInvoices.length} completed leads without invoices</span>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-4">
+                <h2 className="text-lg md:text-xl font-bold text-gray-900">Raise Payout Invoices</h2>
+                <span className="text-xs md:text-sm text-gray-600">{agentData.completedLeadsWithoutInvoices.length} completed leads without invoices</span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-3 md:space-y-3">
                 {agentData.completedLeadsWithoutInvoices.slice(0, 5).map((lead) => (
-                  <div key={lead._id || lead.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{lead.loanAccountNo || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
+                  <div key={lead._id || lead.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 break-words">{lead.loanAccountNo || 'N/A'}</p>
+                      <p className="text-xs text-gray-600 mt-1 break-words">
                         {lead.loanAccountNo || 'N/A'} • {lead.bank?.name || 'N/A'} • ₹{(lead.loanAmount || 0).toLocaleString()}
                       </p>
                     </div>
                     <button
                       onClick={() => handleRaiseInvoice(lead._id || lead.id)}
-                      className="px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors text-sm"
+                      className="w-full sm:w-auto px-4 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors text-sm font-medium"
                     >
                       Request Invoice
                     </button>
@@ -284,7 +284,7 @@ const Dashboard = () => {
                 {agentData.completedLeadsWithoutInvoices.length > 5 && (
                   <button
                     onClick={() => navigate('/leads?status=completed&hasInvoice=false')}
-                    className="w-full text-sm text-primary-900 hover:text-primary-800 font-medium"
+                    className="w-full text-sm text-primary-900 hover:text-primary-800 font-medium py-2"
                   >
                     View All ({agentData.completedLeadsWithoutInvoices.length} leads)
                   </button>
@@ -295,34 +295,36 @@ const Dashboard = () => {
 
           {/* Accept or Escalate Invoices Section */}
           {agentData.pendingInvoicesForAction.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Pending Invoices - Action Required</h2>
-                <span className="text-sm text-gray-600">{agentData.pendingInvoicesForAction.length} pending</span>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <h2 className="text-lg md:text-xl font-bold text-gray-900 flex-1 min-w-0">Pending Invoices - Action Required</h2>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 whitespace-nowrap flex-shrink-0">
+                  {agentData.pendingInvoicesForAction.length} Pending
+                </span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4 md:space-y-3">
                 {agentData.pendingInvoicesForAction.slice(0, 5).map((invoice) => (
-                  <div key={invoice._id || invoice.id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{invoice.invoiceNumber || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
+                  <div key={invoice._id || invoice.id} className="flex flex-col gap-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 break-words">{invoice.invoiceNumber || 'N/A'}</p>
+                      <p className="text-xs text-gray-600 mt-1 break-words">
                         {invoice.lead?.loanAccountNo || 'N/A'} • ₹{(invoice.commissionAmount || invoice.netPayable || 0).toLocaleString()}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3 xs:gap-4">
                       <button
                         onClick={() => handleAcceptInvoice(invoice._id || invoice.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                        className="flex items-center justify-center gap-1.5 px-4 py-3 min-h-[44px] bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium w-full xs:w-auto"
                       >
-                        <CheckCircle className="w-4 h-4" />
-                        Accept
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Accept</span>
                       </button>
                       <button
                         onClick={() => handleEscalateInvoice(invoice._id || invoice.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                        className="flex items-center justify-center gap-1.5 px-4 py-3 min-h-[44px] bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium w-full xs:w-auto"
                       >
-                        <AlertCircle className="w-4 h-4" />
-                        Escalate
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Escalate</span>
                       </button>
                     </div>
                   </div>
@@ -330,7 +332,7 @@ const Dashboard = () => {
                 {agentData.pendingInvoicesForAction.length > 5 && (
                   <button
                     onClick={() => navigate('/invoices?status=pending')}
-                    className="w-full text-sm text-primary-900 hover:text-primary-800 font-medium"
+                    className="w-full text-sm text-primary-900 hover:text-primary-800 font-medium py-2"
                   >
                     View All ({agentData.pendingInvoicesForAction.length} invoices)
                   </button>
@@ -341,24 +343,26 @@ const Dashboard = () => {
 
           {/* Escalated Invoices Section */}
           {agentData.escalatedInvoicesList.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Escalated Invoices</h2>
-                <span className="text-sm text-gray-600">{agentData.escalatedInvoicesList.length} escalated</span>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <h2 className="text-lg md:text-xl font-bold text-gray-900 flex-1 min-w-0">Escalated Invoices</h2>
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 whitespace-nowrap flex-shrink-0">
+                  {agentData.escalatedInvoicesList.length} Escalated
+                </span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4 md:space-y-3">
                 {agentData.escalatedInvoicesList.slice(0, 5).map((invoice) => (
-                  <div key={invoice._id || invoice.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{invoice.invoiceNumber || 'N/A'}</p>
-                      <p className="text-xs text-gray-600">
+                  <div key={invoice._id || invoice.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 break-words">{invoice.invoiceNumber || 'N/A'}</p>
+                      <p className="text-xs text-gray-600 mt-1 break-words">
                         {invoice.lead?.loanAccountNo || 'N/A'} • ₹{(invoice.commissionAmount || invoice.netPayable || 0).toLocaleString()}
                       </p>
                       {invoice.escalationReason && (
-                        <p className="text-xs text-orange-700 mt-1">Reason: {invoice.escalationReason}</p>
+                        <p className="text-xs text-orange-700 mt-1 break-words">Reason: {invoice.escalationReason}</p>
                       )}
                     </div>
-                    <span className="px-3 py-1 bg-orange-200 text-orange-800 rounded-full text-xs font-medium">
+                    <span className="inline-flex items-center justify-center px-3 py-1.5 bg-orange-200 text-orange-800 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 self-start sm:self-auto">
                       Under Review
                     </span>
                   </div>
@@ -366,7 +370,7 @@ const Dashboard = () => {
                 {agentData.escalatedInvoicesList.length > 5 && (
                   <button
                     onClick={() => navigate('/invoices?status=escalated')}
-                    className="w-full text-sm text-primary-900 hover:text-primary-800 font-medium"
+                    className="w-full text-sm text-primary-900 hover:text-primary-800 font-medium py-2"
                   >
                     View All ({agentData.escalatedInvoicesList.length} invoices)
                   </button>

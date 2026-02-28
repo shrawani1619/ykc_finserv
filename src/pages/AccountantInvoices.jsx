@@ -132,6 +132,7 @@ const AccountantInvoices = () => {
     .reduce((sum, inv) => {
       return sum + (inv.commissionAmount || inv.netPayable || inv.amount || 0)
     }, 0)
+  const pendingAmount = totalAmount - paidAmount
 
   // Filter and search invoices
   const filteredInvoices = useMemo(() => {
@@ -438,8 +439,28 @@ const AccountantInvoices = () => {
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Compact Summary Bar - Mobile Only */}
+      <div className="md:hidden bg-gradient-to-r from-gray-50 to-white rounded-lg shadow-sm border border-gray-200 px-4 py-3.5">
+        <div className="flex items-center justify-between text-xs sm:text-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Total</span>
+            <span className="font-bold text-gray-900">₹{totalAmount.toLocaleString()}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Paid</span>
+            <span className="font-bold text-green-600">₹{paidAmount.toLocaleString()}</span>
+          </div>
+          <span className="text-gray-300 mx-1">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500 font-medium">Pending</span>
+            <span className="font-bold text-orange-600">₹{pendingAmount.toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Statistics Cards - Desktop Only */}
+      <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Total Invoices"
           value={totalInvoices.toString()}
@@ -466,8 +487,8 @@ const AccountantInvoices = () => {
         />
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      {/* Search and Filters - Sticky on Mobile */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:relative sticky top-0 z-20 md:z-auto md:shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4 flex-1">
             <div className="relative flex-1 max-w-md">

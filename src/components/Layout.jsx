@@ -1,17 +1,45 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 
 const Layout = () => {
   const [sidebarMinimized, setSidebarMinimized] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024)
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(false)
+      }
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <Sidebar onMinimizeChange={setSidebarMinimized} />
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarMinimized ? 'ml-20' : 'ml-64'} relative z-0 min-w-0 overflow-hidden`}>
-        <Header />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 relative z-10 w-full">
+      <Sidebar 
+        onMinimizeChange={setSidebarMinimized} 
+        isMobile={isMobile}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-[80] lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${
+        isMobile ? 'ml-0' : sidebarMinimized ? 'ml-20' : 'ml-64'
+      } relative z-0 min-w-0 overflow-hidden`}>
+        <Header onMenuClick={() => setSidebarOpen(true)} isMobile={isMobile} />
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 relative z-10 w-full">
           <div className="w-full max-w-full mx-auto h-full">
             <Outlet />
           </div>

@@ -211,16 +211,16 @@ const FranchiseCommission = () => {
   }
 
   return (
-    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Commission Limits</h1>
-          <p className="text-sm text-gray-600 mt-1">Manage maximum commission limits for franchise by bank</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Commission Limits</h1>
+          <p className="text-xs sm:text-sm text-gray-600 mt-1">Manage maximum commission limits for franchises by bank.</p>
         </div>
         <button
           onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 bg-primary-900 text-white rounded-lg hover:bg-primary-800 transition-colors text-sm font-medium"
         >
           <Plus className="w-5 h-5" />
           <span>Set Commission Limit</span>
@@ -236,13 +236,13 @@ const FranchiseCommission = () => {
             placeholder="Search by bank name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+            className="w-full pl-9 pr-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
           />
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Desktop Table View */}
+      <div className="hidden md:block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -336,6 +336,91 @@ const FranchiseCommission = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+            <p className="mt-2 text-sm text-gray-500">Loading...</p>
+          </div>
+        ) : filteredLimits.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-sm text-gray-500">No commission limits found.</p>
+            <p className="text-xs text-gray-400 mt-1">Click "Set Commission Limit" to create one.</p>
+          </div>
+        ) : (
+          filteredLimits.map((limit, index) => {
+            const limitId = limit.id || limit._id
+            return (
+              <div
+                key={limitId || `limit-${index}`}
+                className="bg-white rounded-lg border border-gray-200 p-4 space-y-3"
+              >
+                {/* Card Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-semibold text-gray-900 truncate">
+                      {getBankName(limit.bank)}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <Percent className="w-3 h-3" />
+                        Percentage
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleEdit(limit)}
+                      className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(limit)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Card Details */}
+                <div className="pt-3 border-t border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500 font-medium">Maximum Commission</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {parseFloat(limit.maxCommissionValue).toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="flex items-start justify-between">
+                    <span className="text-xs text-gray-500 font-medium">Created By</span>
+                    <div className="text-right">
+                      <div className="text-xs font-medium text-gray-900">
+                        {limit.createdBy?.name || limit.createdBy?.email || 'N/A'}
+                      </div>
+                      {limit.createdBy?.email && limit.createdBy?.name && (
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {limit.createdBy.email}
+                        </div>
+                      )}
+                      {limit.createdAt && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {new Date(limit.createdAt).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
 
       {/* Create/Edit Modal */}

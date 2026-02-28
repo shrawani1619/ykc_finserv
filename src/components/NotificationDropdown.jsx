@@ -115,20 +115,52 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
     if (wasUnread && setUnreadCount) setUnreadCount((prev) => Math.max(0, prev - 1))
   }
 
+  // Handle click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        // Check if click is not on the notification bell button
+        const bellButton = event.target.closest('button[title="Notifications"]')
+        if (!bellButton) {
+          onClose?.()
+        }
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      // Prevent body scroll when dropdown is open on mobile
+      document.body.style.overflow = 'hidden'
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.body.style.overflow = ''
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
-    <div
-      ref={dropdownRef}
-      className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-[120] max-h-96 overflow-hidden flex flex-col"
-    >
+    <>
+      {/* Mobile Overlay */}
+      <div 
+        className="md:hidden fixed inset-0 bg-black/20 z-[115]"
+        onClick={onClose}
+      />
+      
+      {/* Dropdown */}
+      <div
+        ref={dropdownRef}
+        className="fixed md:absolute right-2 md:right-0 top-16 md:top-full md:mt-2 w-[calc(100vw-1rem)] md:w-96 max-w-sm bg-white rounded-lg shadow-xl border border-gray-200 z-[120] max-h-[calc(100vh-5rem)] md:max-h-96 overflow-hidden flex flex-col"
+      >
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Bell className="w-5 h-5 text-gray-600" />
-          <h3 className="font-semibold text-gray-900">Notifications</h3>
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Notifications</h3>
           {unreadCount > 0 && (
-            <span className="px-2 py-0.5 bg-primary-900 text-white text-xs font-medium rounded-full">
+            <span className="px-2 py-0.5 bg-primary-900 text-white text-xs font-medium rounded-full min-w-[20px] text-center">
               {unreadCount}
             </span>
           )}
@@ -136,7 +168,7 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
         {unreadCount > 0 && (
           <button
             onClick={markAllAsRead}
-            className="text-xs text-primary-900 hover:text-primary-800 font-medium"
+            className="text-xs text-primary-900 hover:text-primary-800 font-medium transition-colors px-2 py-1 rounded hover:bg-primary-50"
           >
             Mark all read
           </button>
@@ -165,8 +197,8 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
               return (
                 <div
                   key={notification._id || notification.id}
-                  className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                    isUnread ? 'bg-blue-50/50' : ''
+                  className={`p-3 sm:p-4 hover:bg-gray-50 transition-colors ${
+                    isUnread ? 'bg-blue-50/50 border-l-2 border-l-primary-900' : ''
                   } ${ticketId || bannerId ? 'cursor-pointer' : ''}`}
                   onClick={() => {
                     if (ticketId) {
@@ -180,43 +212,50 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
                 >
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                      <p className={`text-sm leading-snug ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
                         {notification.title || notification.message || 'Notification'}
                       </p>
                       {notification.message && notification.title && (
-                        <p className="text-xs text-gray-500 mt-1">{notification.message}</p>
+                        <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{notification.message}</p>
                       )}
                       {notification.createdAt && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          {new Date(notification.createdAt).toLocaleString()}
+                        <p className="text-xs text-gray-400 mt-1.5">
+                          {new Date(notification.createdAt).toLocaleString('en-IN', {
+                            day: 'numeric',
+                            month: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                          })}
                         </p>
                       )}
-                      {ticketId && (
-                        <p className="text-xs text-primary-900 mt-1 font-medium">Click to view service request →</p>
-                      )}
-                      {isBannerNotification && (
-                        <p className="text-xs text-primary-900 mt-1 font-medium">Click to view banner details →</p>
+                      {(ticketId || isBannerNotification) && (
+                        <p className="text-xs text-primary-900 mt-2 font-medium flex items-center gap-1">
+                          {isBannerNotification ? 'Click to view banner details' : 'Click to view service request'}
+                          <span>→</span>
+                        </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-start gap-1 flex-shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
                       {isUnread && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             markAsRead(notification._id || notification.id)
                           }}
-                          className="p-1 hover:bg-gray-200 rounded transition-colors"
+                          className="p-1.5 hover:bg-primary-100 rounded transition-colors"
                           title="Mark as read"
                         >
-                          <Check className="w-4 h-4 text-gray-600" />
+                          <Check className="w-4 h-4 text-primary-900" />
                         </button>
                       )}
                       <button
                         onClick={(e) => deleteNotification(e, notification._id || notification.id)}
-                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        className="p-1.5 hover:bg-red-50 rounded transition-colors"
                         title="Delete"
                       >
-                        <X className="w-4 h-4 text-gray-600" />
+                        <X className="w-4 h-4 text-gray-600 hover:text-red-600" />
                       </button>
                     </div>
                   </div>
@@ -229,15 +268,16 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
 
       {/* Footer */}
       {notifications.length > 0 && (
-        <div className="px-4 py-2 border-t border-gray-200 text-center">
+        <div className="px-4 py-3 border-t border-gray-200 text-center bg-gray-50 flex-shrink-0">
           <button
             onClick={onClose}
-            className="text-xs text-primary-900 hover:text-primary-800 font-medium"
+            className="w-full px-4 py-2 text-sm text-primary-900 hover:text-primary-800 font-medium hover:bg-primary-50 rounded-lg transition-colors"
           >
             Close
           </button>
         </div>
       )}
+      </div>
 
       {/* Banner Details Modal */}
       <Modal
@@ -286,7 +326,7 @@ const NotificationDropdown = ({ isOpen, onClose, unreadCount, setUnreadCount }) 
           </div>
         )}
       </Modal>
-    </div>
+    </>
   )
 }
 

@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, Menu } from 'lucide-react'
 import ProfileDropdown from './ProfileDropdown'
 import NotificationDropdown from './NotificationDropdown'
 import { authService } from '../services/auth.service'
 import api from '../services/api'
 
-const Header = () => {
+const Header = ({ onMenuClick, isMobile = false }) => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -115,26 +115,34 @@ const Header = () => {
   }, [isNotificationOpen, isProfileOpen])
 
   return (
-    <header className="bg-white border-b border-gray-200 h-16 px-6 flex items-center justify-between relative z-[100] w-full overflow-visible">
+    <header className="bg-white border-b border-gray-200 h-16 px-3 sm:px-4 md:px-6 flex items-center justify-between relative z-[100] w-full overflow-visible">
       {/* Left Section */}
-      <div className="flex items-center gap-4 min-w-0 flex-shrink">
-        <h1 className="text-2xl font-bold text-gray-900 truncate">{getDashboardTitle()}</h1>
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
+        {isMobile && (
+          <button
+            onClick={onMenuClick}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors mr-2"
+          >
+            <Menu className="w-5 h-5 text-gray-600" />
+          </button>
+        )}
+        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 truncate">{getDashboardTitle()}</h1>
         <div className="flex items-center gap-2">
         </div>
       </div>
 
       {/* Right Section */}
-      <div className="flex items-center gap-4 pr-0 flex-shrink-0 relative">
+      <div className="flex items-center gap-2 sm:gap-4 pr-0 flex-shrink-0 relative">
         {/* Notification Bell */}
         <div className="relative z-[110]" ref={notificationRef}>
           <button
             onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-            className="relative w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
             title="Notifications"
           >
-            <Bell className="w-5 h-5 text-gray-600" />
+            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+              <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-4 h-4 sm:w-5 sm:h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center text-[10px] sm:text-xs">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -151,13 +159,13 @@ const Header = () => {
         <div className="relative z-[110]" ref={profileRef}>
           <button
             onClick={() => setIsProfileOpen(!isProfileOpen)}
-            className="w-8 h-8 rounded-full bg-primary-900 flex items-center justify-center text-white font-semibold hover:bg-primary-800 transition-colors cursor-pointer relative z-[110]"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-primary-900 flex items-center justify-center text-white font-semibold hover:bg-primary-800 transition-colors cursor-pointer relative z-[110] text-sm sm:text-base"
           >
             {user.profileImage ? (
               <img
                 src={user.profileImage}
                 alt={user.name}
-                className="w-8 h-8 rounded-full object-cover"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover"
               />
             ) : (
               <span>{user.name.charAt(0).toUpperCase()}</span>
