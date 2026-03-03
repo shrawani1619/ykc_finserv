@@ -1,27 +1,51 @@
 import { useState, useEffect } from 'react'
-import { authService } from '../services/auth.service'
-import { api } from '../services/api'
+import api from '../services/api'
 
 const RelationshipManagerForm = ({ relationshipManager, onSave, onClose, isSaving = false }) => {
   const isCreate = !relationshipManager
   const [formData, setFormData] = useState({
     name: '',
+    ownerName: '',
     email: '',
     mobile: '',
     password: '',
+    regionalManager: '',
   })
   const [errors, setErrors] = useState({})
+  const [regionalManagers, setRegionalManagers] = useState([])
+  const [loadingRMs, setLoadingRMs] = useState(false)
 
   useEffect(() => {
     if (relationshipManager) {
       setFormData({
         name: relationshipManager.name || '',
+        ownerName: relationshipManager.ownerName || relationshipManager.owner?.name || '',
         email: relationshipManager.email || '',
         mobile: relationshipManager.mobile || '',
         password: '',
+        regionalManager:
+          (relationshipManager.regionalManager && (relationshipManager.regionalManager._id || relationshipManager.regionalManager.id)) ||
+          '',
       })
     }
   }, [relationshipManager])
+
+  useEffect(() => {
+    const loadRegionalManagers = async () => {
+      setLoadingRMs(true)
+      try {
+        const response = await api.users.getAll({ role: 'regional_manager', limit: 500 })
+        const data = response?.data || response || []
+        setRegionalManagers(Array.isArray(data) ? data : [])
+      } catch (error) {
+        console.error('Error loading regional managers:', error)
+        setRegionalManagers([])
+      } finally {
+        setLoadingRMs(false)
+      }
+    }
+    loadRegionalManagers()
+  }, [])
 
   const validate = () => {
     const newErrors = {}
@@ -39,9 +63,16 @@ const RelationshipManagerForm = ({ relationshipManager, onSave, onClose, isSavin
   const handleSubmit = (e) => {
     e.preventDefault()
     if (validate()) {
-      const payload = { ...formData }
+      const payload = {
+        ...formData,
+        // Backend requires ownerName; default to the same as RM name if not explicitly set
+        ownerName: (formData.ownerName || formData.name || '').trim(),
+      }
       if (!isCreate) {
         delete payload.password
+      }
+      if (!payload.regionalManager) {
+        delete payload.regionalManager
       }
       onSave(payload, {})
     }
@@ -118,6 +149,38 @@ const RelationshipManagerForm = ({ relationshipManager, onSave, onClose, isSavin
           {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
         </div>
       )}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Assign Regional Manager
+          <span className="text-gray-500 text-xs ml-1">(optional)</span>
+        </label>
+        {loadingRMs ? (
+          <p className="text-sm text-gray-500">Loading regional managers...</p>
+        ) : regionalManagers.length === 0 ? (
+          <p className="text-sm text-gray-500">No regional managers available</p>
+        ) : (
+          <select
+            name="regionalManager"
+            value={formData.regionalManager || ''}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 border-gray-300 bg-white text-sm"
+          >
+            <option value="">Select regional manager</option>
+            {regionalManagers.map((rm) => {
+              const id = rm._id || rm.id
+              return (
+                <option key={id} value={id}>
+                  {rm.name} ({rm.email})
+                </option>
+              )
+            })}
+          </select>
+        )}
+        <p className="mt-1 text-xs text-gray-500">
+          Each regional manager can own at most one relationship manager.
+        </p>
+      </div>
 
       <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
         <button
